@@ -1,4 +1,4 @@
-from zipfile import Path
+from pathlib import Path
 import pandas as pd
 from typing import Tuple, List
 
