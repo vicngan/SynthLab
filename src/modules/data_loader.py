@@ -3,10 +3,10 @@ import pandas as pd
 from typing import Tuple, List
 
 class DataLoader: #loads and clean CSV data for synthetic data generation
-    def __init__(self, file_path: str):
+    def __init__(self):
         pass
 
-    def load_data(self, filepath: str) -> pd.DataFrame: #load data from CSV file
+    def load_data(self) -> pd.DataFrame: #load data from CSV file
         """
         Args:
             filepath: Path to the CSV file.
