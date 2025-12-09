@@ -41,7 +41,7 @@ class DataLoader: #loads and clean CSV data for synthetic data generation
                 df_clean[col]= df_clean[col].fillna(df_clean[col].median()) #fill missing values with median
 
         print(f"Cleaned: {len(df)} -> {len(df_clean)} rows") #print number of rows before and after cleaning
-        return df_clean, df_clean.column.tolist() #identify categorical columns
+        return df_clean, df_clean.columns.tolist() #identify categorical columns
         
         
 
