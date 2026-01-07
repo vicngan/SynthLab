@@ -1,0 +1,51 @@
+{
+  "name": "Demo Profile",
+  "metadata": {
+    "created": "2026-01-07T00:27:10.037622",
+    "modified": "2026-01-07T00:27:10.037669",
+    "version": "1.0"
+  },
+  "constraints": [
+    {
+      "column": "Age",
+      "constraint_type": "range",
+      "params": {
+        "min": 0,
+        "max": 120,
+        "dtype": "int",
+        "unit": "years"
+      }
+    },
+    {
+      "column": "Gender",
+      "constraint_type": "categorical",
+      "params": {
+        "allowed_values": [
+          "M",
+          "F"
+        ],
+        "ordered": false,
+        "replacement_strategy": "random"
+      }
+    },
+    {
+      "column": "Glucose",
+      "constraint_type": "range",
+      "params": {
+        "min": 50,
+        "max": 600,
+        "dtype": null,
+        "unit": "mg/dL"
+      }
+    },
+    {
+      "column": "BMI",
+      "constraint_type": "statistical",
+      "params": {
+        "target_mean": 25.0,
+        "target_std": 5.0,
+        "tolerance": 0.1
+      }
+    }
+  ]
+}

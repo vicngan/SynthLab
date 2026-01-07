@@ -1,0 +1,122 @@
+{
+  "name": "Clinical Labs",
+  "metadata": {
+    "created": "2026-01-07T00:27:10.046040",
+    "modified": "2026-01-07T00:27:10.046084",
+    "version": "1.0"
+  },
+  "constraints": [
+    {
+      "column": "Age",
+      "constraint_type": "range",
+      "params": {
+        "min": 0,
+        "max": 120,
+        "dtype": "int",
+        "unit": "years"
+      }
+    },
+    {
+      "column": "Gender",
+      "constraint_type": "categorical",
+      "params": {
+        "allowed_values": [
+          "M",
+          "F"
+        ],
+        "ordered": false,
+        "replacement_strategy": "random"
+      }
+    },
+    {
+      "column": "BloodPressure",
+      "constraint_type": "range",
+      "params": {
+        "min": 40,
+        "max": 250,
+        "dtype": null,
+        "unit": "mm Hg"
+      }
+    },
+    {
+      "column": "HeartRate",
+      "constraint_type": "range",
+      "params": {
+        "min": 30,
+        "max": 200,
+        "dtype": null,
+        "unit": "bpm"
+      }
+    },
+    {
+      "column": "Temperature",
+      "constraint_type": "range",
+      "params": {
+        "min": 35.0,
+        "max": 42.0,
+        "dtype": null,
+        "unit": "\u00b0C"
+      }
+    },
+    {
+      "column": "Glucose",
+      "constraint_type": "range",
+      "params": {
+        "min": 50,
+        "max": 600,
+        "dtype": null,
+        "unit": "mg/dL"
+      }
+    },
+    {
+      "column": "Cholesterol",
+      "constraint_type": "range",
+      "params": {
+        "min": 100,
+        "max": 400,
+        "dtype": null,
+        "unit": "mg/dL"
+      }
+    },
+    {
+      "column": "Hemoglobin",
+      "constraint_type": "range",
+      "params": {
+        "min": 5,
+        "max": 20,
+        "dtype": null,
+        "unit": "g/dL"
+      }
+    },
+    {
+      "column": "BMI",
+      "constraint_type": "range",
+      "params": {
+        "min": 10,
+        "max": 80,
+        "dtype": null,
+        "unit": "kg/m\u00b2"
+      }
+    },
+    {
+      "column": "Weight",
+      "constraint_type": "range",
+      "params": {
+        "min": 20,
+        "max": 300,
+        "dtype": null,
+        "unit": "kg"
+      }
+    },
+    {
+      "column": "Height",
+      "constraint_type": "range",
+      "params": {
+        "min": 50,
+        "max": 250,
+        "dtype": null,
+        "unit": "cm"
+      }
+    }
+  ]
+}
