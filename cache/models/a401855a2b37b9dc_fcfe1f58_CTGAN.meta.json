@@ -1,0 +1,12 @@
+{
+  "cache_key": "a401855a2b37b9dc_fcfe1f58_CTGAN",
+  "cached_at": "2026-01-12T04:37:09.263311",
+  "file_size_mb": 5.817413330078125e-05,
+  "last_accessed": "2026-01-12T04:37:09.264023",
+  "data_shape": [
+    100,
+    3
+  ],
+  "training_time_sec": 300,
+  "method": "CTGAN"
+}
