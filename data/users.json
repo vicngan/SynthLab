@@ -1,0 +1,20 @@
+{
+  "admin": {
+    "username": "admin",
+    "email": "admin@synthlab.local",
+    "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$oZSydi6l9N7b+9/7PwcAIA$KTwn44cr8z5RA/dIw9zUrPMoLY6Rbhu76m7EViYM1cQ",
+    "disabled": false,
+    "role": "admin",
+    "api_key": "sk_KyvK2SOErZkafN7mdDYvhtZ_qj0LkKZ-QWtsj5Nk3u8",
+    "rate_limit": 100
+  },
+  "researcher1": {
+    "username": "researcher1",
+    "email": "researcher@university.edu",
+    "hashed_password": "$argon2id$v=19$m=65536,t=3,p=4$uTdmDOE8Z6x1TillLAWg9A$W1/Bv82lyvUTRu4eBZWGyMk+w2Yf/xglO4XtGx6KXhE",
+    "disabled": false,
+    "role": "researcher",
+    "api_key": "sk_iSSFMO8Aflz_H1_KlxKgf9x5WXCixmQYQ3yU8UNA4Dc",
+    "rate_limit": 10
+  }
+}
