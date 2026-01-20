@@ -16,7 +16,47 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
     const [experiment, setExperiment] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-...
+    const [notes, setNotes] = useState("");
+    const [isEditingNotes, setIsEditingNotes] = useState(false);
+
+    useEffect(() => {
+        const fetchExperiment = async () => {
+            try {
+                setLoading(true);
+                const response = await axios.get(`http://127.0.0.1:8000/api/experiments/${experimentId}`);
+                setExperiment(response.data);
+                setNotes(response.data.notes || "");
+                setError(null);
+            } catch (err) {
+                setError('Failed to fetch experiment details.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (experimentId) {
+            fetchExperiment();
+        }
+    }, [experimentId]);
+
+    const handleSaveNotes = async () => {
+        try {
+            // Assuming an endpoint exists to update notes
+            await axios.put(`http://127.0.0.1:8000/api/experiments/${experimentId}/notes`, { notes });
+            setIsEditingNotes(false);
+        } catch (err) {
+            console.error("Failed to save notes", err);
+            // In a real app, show a toast notification here
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-violet-500" size={32} /></div>;
+    if (error) return <div className="p-8 text-red-500 flex items-center gap-2"><AlertCircle /> {error}</div>;
+    if (!experiment) return null;
+
+    const { config } = experiment;
+
     return (
         <div className="space-y-8">
             {/* Configuration Section */}
@@ -45,7 +85,34 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
 
             {/* Annotations Section */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-...
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+                        <FileText size={20} />
+                        <span>Lab Notebook / Annotations</span>
+                    </h3>
+                    <button 
+                        onClick={isEditingNotes ? handleSaveNotes : () => setIsEditingNotes(true)}
+                        className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md border ${isEditingNotes ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                    >
+                        {isEditingNotes ? <><Save size={14} /> Save</> : <><Edit size={14} /> Edit</>}
+                    </button>
+                </div>
+                {isEditingNotes ? (
+                    <textarea 
+                        value={notes} 
+                        onChange={(e) => setNotes(e.target.value)} 
+                        className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent font-mono text-sm"
+                        placeholder="Add markdown notes here..."
+                    />
+                ) : (
+                    <div className="prose prose-slate max-w-none">
+                        {notes ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown> : <p className="text-slate-400 italic">No notes added.</p>}
+                    </div>
+                )}
+            </div>
+            
+            {/* Results Dashboard */}
+            {experiment.report && <ComparisonDashboard plots={experiment.plots} />}
         </div>
     );
 };
