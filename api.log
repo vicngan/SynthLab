@@ -392,3 +392,4 @@ Traceback (most recent call last):
   File "/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/api.py", line 20, in <module>
     from src.modules.clinical import ClinicalAnalyzer
 ModuleNotFoundError: No module named 'src.modules.clinical'
+WARNING:  StatReload detected changes in 'api.py'. Reloading...

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Loader2, AlertCircle, SlidersHorizontal, FileText, BookText, Edit, Save, GitFork } from 'lucide-react';
+import { Loader2, AlertCircle, SlidersHorizontal, FileText, BookText, Edit, Save, GitFork, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComparisonDashboard from './ComparisonDashboard';
@@ -66,13 +66,22 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
                         <SlidersHorizontal size={20} />
                         <span>Configuration</span>
                     </h3>
-                    <button 
-                        onClick={() => onFork(experiment.config)}
-                        className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
-                    >
-                        <GitFork size={14} />
-                        Fork Experiment
-                    </button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/download`, '_blank')}
+                            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
+                        >
+                            <Download size={14} />
+                            Download CSV
+                        </button>
+                        <button 
+                            onClick={() => onFork(experiment.config)}
+                            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                        >
+                            <GitFork size={14} />
+                            Fork Experiment
+                        </button>
+                    </div>
                 </div>
                 <div className="space-y-1">
                     <DetailItem label="Experiment ID" value={config.experiment_id} />

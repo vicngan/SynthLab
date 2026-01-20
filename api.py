@@ -8,6 +8,7 @@ import uuid
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Add src directory to sys.path for module imports
@@ -119,9 +120,12 @@ async def synthesize_data(
         with open(exp_dir / "report.json", "w") as f:
             json.dump(full_report, f, indent=4)
         
+        # Save synthetic data to CSV for download
+        synthetic_data.to_csv(exp_dir / "synthetic_data.csv", index=False)
+
         return {
             "experiment_id": experiment_id,
-            "synthetic_data": synthetic_data.to_dict(orient='records'),
+            "synthetic_data": synthetic_data.head(100).to_dict(orient='records'), # Return only preview
             "clinical_report": clinical_analysis,
             "quality_report": {"column_stats": stats},
             "privacy_report": {**privacy_check, "dcr": dcr},
@@ -191,6 +195,14 @@ def update_notes(experiment_id: str, note: NoteUpdate):
         f.write(note.notes)
     
     return {"status": "success", "notes": note.notes}
+
+@app.get("/api/experiments/{experiment_id}/download")
+def download_experiment_data(experiment_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    file_path = exp_dir / "synthetic_data.csv"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return FileResponse(file_path, media_type='text/csv', filename=f"synthetic_data_{experiment_id}.csv")
 
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):
