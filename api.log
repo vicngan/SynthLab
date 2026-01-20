@@ -186,3 +186,38 @@ INFO:     Finished server process [25611]
 INFO:     Started server process [25625]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'node_modules/plotly.js/.circleci/download_google_fonts.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [25625]
+INFO:     Started server process [27379]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/src/modules/data_loader.py:81: UserWarning: Excel support not available. Install: pip install openpyxl
+  warnings.warn("Excel support not available. Install: pip install openpyxl")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/src/modules/data_loader.py:89: UserWarning: SQL support not available. Install: pip install sqlalchemy
+  warnings.warn("SQL support not available. Install: pip install sqlalchemy")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/sdv/single_table/base.py:168: FutureWarning: The 'SingleTableMetadata' is deprecated. Please use the new 'Metadata' class for synthesizers.
+  warnings.warn(DEPRECATION_MSG, FutureWarning)
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/sdv/single_table/base.py:134: UserWarning: We strongly recommend saving the metadata using 'save_to_json' for replicability in future SDV versions.
+  warnings.warn(
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/ctgan/synthesizers/_utils.py:16: FutureWarning: `cuda` parameter is deprecated and will be removed in a future release. Please use `enable_gpu` instead.
+  warnings.warn(
+✓ DataLoader initialized
+  Supported formats: csv, parquet, feather
+  ✓ Cleaned: 768 → 768 rows
+Training CTGAN synthesizer...
+Synthesizer trained using CTGAN method.
+Generating 1000 synthetic rows...
+Applied medical constraints to 181 data points.
+Applying medical constraints to synthetic data...
+INFO:     127.0.0.1:55828 - "POST /api/synthesize HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [27379]
+INFO:     Started server process [28485]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
