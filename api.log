@@ -298,3 +298,8 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     127.0.0.1:60987 - "GET /api/experiments HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60988 - "GET /api/experiments HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [37867]

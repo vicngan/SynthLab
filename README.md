@@ -45,6 +45,10 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **REST API**: Programmatic access to the synthesis engine via FastAPI.
 - **JSON Response**: Get synthetic data and all quality/privacy reports in a single structured format.
 
+### Clinical & BME Specifics
+- **Smart Type Detection**: Automatically identifies clinical columns (e.g., HbA1c, Glucose) and suggests appropriate physiological bounds and distributions.
+- **ICD-10 Support**: Specialized validation for hierarchical medical codes to ensure synthetic data adheres to standard medical coding formats.
+
 ### Collaboration & Versioning
 - **Annotation Layers**: Allow users to add Markdown notes to a generation run (e.g., "Increased privacy constraints for IRB approval").
 - **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
