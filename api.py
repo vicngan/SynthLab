@@ -1,12 +1,14 @@
 import pandas as pd
 import io
 import sys
+import json
 from pathlib import Path
 from typing import List
 import uuid
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 # Add src directory to sys.path for module imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -36,6 +38,10 @@ app.add_middleware(
 # --- In-Memory Storage for Literature Search ---
 # In a real-world app, you'd use a more robust solution like Redis or a database.
 literature_sessions = {}
+
+# --- Pydantic Models ---
+class NoteUpdate(BaseModel):
+    notes: str
 
 # --- API Endpoints ---
 @app.get("/")
@@ -91,8 +97,30 @@ async def synthesize_data(
             'synthetic': corr_plots[1].to_json(),
             'diff': corr_plots[2].to_json()
         }
+
+        # --- Save Experiment Artifacts ---
+        experiment_id = f"exp_{uuid.uuid4().hex[:8]}"
+        exp_dir = Path("experiments") / experiment_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "experiment_id": experiment_id,
+            "method": method,
+            "timestamp": pd.Timestamp.now().isoformat(),
+            "num_rows": num_rows,
+            "sensitive_column": sensitive_column,
+            "epsilon": epsilon
+        }
+        with open(exp_dir / "config.json", "w") as f:
+            json.dump(config, f, indent=4)
+
+        # Save full report (heavy data) separately
+        full_report = {**config, "quality_report": {"column_stats": stats}, "privacy_report": {**privacy_check, "dcr": dcr}, "fairness_report": fairness_results, "plots": {"distributions": dist_plots_json, "correlations": corr_plots_json}}
+        with open(exp_dir / "report.json", "w") as f:
+            json.dump(full_report, f, indent=4)
         
         return {
+            "experiment_id": experiment_id,
             "synthetic_data": synthetic_data.to_dict(orient='records'),
             "clinical_report": clinical_analysis,
             "quality_report": {"column_stats": stats},
@@ -108,6 +136,61 @@ async def synthesize_data(
     except Exception as e:
         print(f"An error occurred during synthesis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/experiments")
+def list_experiments():
+    experiments_dir = Path("experiments")
+    experiments = []
+    
+    if not experiments_dir.exists():
+        return []
+
+    # Optimized listing: Only read config.json, skip heavy reports
+    for exp_dir in experiments_dir.iterdir():
+        if exp_dir.is_dir() and exp_dir.name.startswith("exp_"):
+            config_path = exp_dir / "config.json"
+            if config_path.exists():
+                try:
+                    with open(config_path, "r") as f:
+                        config = json.load(f)
+                        experiments.append(config)
+                except Exception:
+                    continue
+    
+    # Sort by timestamp descending (newest first)
+    experiments.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return experiments
+
+@app.get("/api/experiments/{experiment_id}")
+def get_experiment(experiment_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    response = {}
+    
+    # Load Report (contains config + stats)
+    if (exp_dir / "report.json").exists():
+        with open(exp_dir / "report.json", "r") as f:
+            response = json.load(f)
+            
+    # Load Notes
+    if (exp_dir / "notes.md").exists():
+        with open(exp_dir / "notes.md", "r") as f:
+            response["notes"] = f.read()
+            
+    return response
+
+@app.put("/api/experiments/{experiment_id}/notes")
+def update_notes(experiment_id: str, note: NoteUpdate):
+    exp_dir = Path("experiments") / experiment_id
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    with open(exp_dir / "notes.md", "w") as f:
+        f.write(note.notes)
+    
+    return {"status": "success", "notes": note.notes}
 
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):

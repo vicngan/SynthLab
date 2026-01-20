@@ -77,8 +77,6 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
                 <div className="space-y-1">
                     <DetailItem label="Experiment ID" value={config.experiment_id} />
                     <DetailItem label="Timestamp" value={new Date(config.timestamp).toLocaleString()} />
-...
-                    <DetailItem label="Fairness Column" value={config.sensitive_column || 'N/A'} />
                     <DetailItem label="Privacy (Epsilon)" value={config.epsilon} />
                 </div>
             </div>
