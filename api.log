@@ -221,3 +221,44 @@ INFO:     Finished server process [27379]
 INFO:     Started server process [28485]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:359: UserWarning: resource_tracker: There appear to be 14 leaked semlock objects to clean up at shutdown
+  warnings.warn(
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:359: UserWarning: resource_tracker: There appear to be 2 leaked folder objects to clean up at shutdown
+  warnings.warn(
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:375: UserWarning: resource_tracker: /var/folders/qv/xq09wxnx48d571rvb_fgr5kc0000gn/T/joblib_memmapping_folder_27379_66a041a2d7f641b5a1011bc34503dd5c_1802820a42b840348a23d606796ac040: FileNotFoundError(2, 'No such file or directory')
+  warnings.warn(f"resource_tracker: {name}: {e!r}")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:375: UserWarning: resource_tracker: /var/folders/qv/xq09wxnx48d571rvb_fgr5kc0000gn/T/joblib_memmapping_folder_27379_66a041a2d7f641b5a1011bc34503dd5c_feae49d1a5cb4462b4344d95240e315b: FileNotFoundError(2, 'No such file or directory')
+  warnings.warn(f"resource_tracker: {name}: {e!r}")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/src/modules/data_loader.py:81: UserWarning: Excel support not available. Install: pip install openpyxl
+  warnings.warn("Excel support not available. Install: pip install openpyxl")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/src/modules/data_loader.py:89: UserWarning: SQL support not available. Install: pip install sqlalchemy
+  warnings.warn("SQL support not available. Install: pip install sqlalchemy")
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/sdv/single_table/base.py:168: FutureWarning: The 'SingleTableMetadata' is deprecated. Please use the new 'Metadata' class for synthesizers.
+  warnings.warn(DEPRECATION_MSG, FutureWarning)
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/sdv/single_table/base.py:134: UserWarning: We strongly recommend saving the metadata using 'save_to_json' for replicability in future SDV versions.
+  warnings.warn(
+/Users/victoriangannguyen/Downloads/vic_coding/SynthLab/venv/lib/python3.12/site-packages/ctgan/synthesizers/_utils.py:16: FutureWarning: `cuda` parameter is deprecated and will be removed in a future release. Please use `enable_gpu` instead.
+  warnings.warn(
+✓ DataLoader initialized
+  Supported formats: csv, parquet, feather
+  Removed 234 duplicate rows
+  ✓ Cleaned: 682 → 448 rows
+Training CTGAN synthesizer...
+Synthesizer trained using CTGAN method.
+Generating 1000 synthetic rows...
+Applying medical constraints to synthetic data...
+INFO:     127.0.0.1:56348 - "POST /api/synthesize HTTP/1.1" 200 OK
+Loading PDF and initializing model : all-MiniLM-L6-v2...
+Initialization complete. Model loaded and PDF processed!
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00,  2.99it/s]Batches: 100%|██████████| 1/1 [00:00<00:00,  2.99it/s]
+FAISS index rebuilt with 9 documents.
+Added 9 pages from The Journal of Pathology - 2016 - Graham - Measuring cancer evolution from the genome.pdf to the index.
+INFO:     127.0.0.1:56403 - "POST /api/literature/upload HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28485]
+INFO:     Started server process [29476]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

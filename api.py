@@ -46,7 +46,8 @@ async def synthesize_data(
     file: UploadFile = File(...),
     method: str = Form("CTGAN"),
     num_rows: int = Form(1000),
-    sensitive_column: str = Form(None)
+    sensitive_column: str = Form(None),
+    epsilon: float = Form(0.0) # Add epsilon parameter
 ):
     if file.content_type != 'text/csv':
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
@@ -57,7 +58,8 @@ async def synthesize_data(
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
 
-        generator = SyntheticGenerator(method=method)
+        # Pass epsilon to the generator
+        generator = SyntheticGenerator(method=method, epsilon=epsilon if epsilon > 0 else None)
         generator.train(clean_df)
         synthetic_data = generator.generate(num_rows)
 
