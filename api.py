@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Add src directory to sys.path for module imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from src.modules.data_loader import DataLoader
 from src.modules.synthesizer import SyntheticGenerator
