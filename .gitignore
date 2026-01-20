@@ -6,3 +6,4 @@ data/synthetic/
 echo ".env" >> .gitignore.env
 .DS_Store
 .env
+node_modules
