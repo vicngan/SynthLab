@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown } from 'lucide-react';
+import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown, History } from 'lucide-react';
 import ClipLoader from "react-spinners/ClipLoader";
 import Results from './components/Results';
 import ComparisonDashboard from './components/ComparisonDashboard';
+import ExperimentHistory from './components/ExperimentHistory';
 
 const TabButton = ({ active, onClick, icon, label }) => (
   <button 
@@ -224,6 +225,10 @@ const App = () => {
                 </div>
              )}
          </div>
+    );
+    
+    const renderHistoryContent = () => (
+        <ExperimentHistory />
     );
 
     const renderSettingsContent = () => (
@@ -458,12 +463,14 @@ const App = () => {
                     {isSidebarOpen && activeTab !== 'generator' && (
                         <div className="p-4 space-y-6">
                             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                {activeTab === 'literature' ? 'Literature' : 'Settings'}
+                                {activeTab === 'literature' ? 'Literature' : (activeTab === 'history' ? 'Experiment History' : 'Settings')}
                             </h4>
                             <p className="text-sm text-slate-500">
                                 {activeTab === 'literature' 
                                     ? 'The Literature RAG module allows you to upload research papers and perform semantic search to find relevant information.'
-                                    : 'Modify your user profile and application preferences in the main view.'
+                                    : (activeTab === 'history' 
+                                        ? 'Browse, review, and compare previous synthetic data generation runs.' 
+                                        : 'Modify your user profile and application preferences in the main view.')
                                 }
                             </p>
                         </div>
@@ -489,11 +496,13 @@ const App = () => {
                 <main className="flex-1 overflow-y-auto p-8 relative">
                     <div className="flex items-center gap-1 mb-8 border-b border-slate-200">
                         <TabButton active={activeTab === 'generator'} onClick={() => setActiveTab('generator')} icon={<Beaker size={16} />} label="Data Generator" />
+                        <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<History size={16} />} label="History" />
                         <TabButton active={activeTab === 'literature'} onClick={() => setActiveTab('literature')} icon={<BookOpen size={16} />} label="Literature Review" />
                         <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={16} />} label="Settings" />
                     </div>
-                    <div className="max-w-5xl mx-auto">
+                    <div className="max-w-7xl mx-auto">
                         {activeTab === 'generator' && renderGeneratorContent()}
+                        {activeTab === 'history' && renderHistoryContent()}
                         {activeTab === 'literature' && renderLiteratureContent()}
                         {activeTab === 'settings' && renderSettingsContent()}
                     </div>

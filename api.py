@@ -4,9 +4,13 @@ import sys
 from pathlib import Path
 from typing import List
 import uuid
+import os
+import json
+from datetime import datetime
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Add src directory to sys.path for module imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -16,11 +20,14 @@ from src.modules.synthesizer import SyntheticGenerator
 from src.modules.stress_test import QualityReport
 from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
 
+# --- Constants ---
+EXPERIMENTS_DIR = Path("experiments")
+
 # --- FastAPI App Initialization ---
 app = FastAPI(
     title="SynthLab API",
     description="API for generating privacy-safe synthetic data and performing literature analysis.",
-    version="0.2.0"
+    version="0.3.0" # Version bump for new feature
 )
 
 # --- CORS Middleware ---
@@ -33,10 +40,35 @@ app.add_middleware(
 )
 
 # --- In-Memory Storage for Literature Search ---
-# In a real-world app, you'd use a more robust solution like Redis or a database.
 literature_sessions = {}
 
+# --- Helper Functions ---
+def save_experiment(experiment_id: str, config: dict, reports: dict, synthetic_df: pd.DataFrame):
+    """Saves all artifacts for a given experiment."""
+    exp_dir = EXPERIMENTS_DIR / experiment_id
+    os.makedirs(exp_dir, exist_ok=True)
+
+    # Save config
+    with open(exp_dir / "config.json", 'w') as f:
+        json.dump(config, f, indent=4)
+
+    # Save reports
+    with open(exp_dir / "report.json", 'w') as f:
+        # Clone reports and remove raw data before saving
+        reports_to_save = reports.copy()
+        reports_to_save.pop("synthetic_data", None)
+        json.dump(reports_to_save, f, indent=4)
+
+    # Save synthetic data
+    synthetic_df.to_csv(exp_dir / "synthetic_data.csv", index=False)
+
+
 # --- API Endpoints ---
+@app.on_event("startup")
+async def startup_event():
+    """Create experiments directory on startup."""
+    os.makedirs(EXPERIMENTS_DIR, exist_ok=True)
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the SynthLab API"}
@@ -47,11 +79,26 @@ async def synthesize_data(
     method: str = Form("CTGAN"),
     num_rows: int = Form(1000),
     sensitive_column: str = Form(None),
-    epsilon: float = Form(0.0), # Add epsilon parameter
+    epsilon: float = Form(0.0),
     epochs: int = Form(300)
 ):
     if file.content_type != 'text/csv':
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
+
+    # --- Experiment Setup ---
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    experiment_id = f"exp_{timestamp}_{uuid.uuid4().hex[:6]}"
+    
+    config = {
+        "experiment_id": experiment_id,
+        "timestamp": datetime.now().isoformat(),
+        "original_filename": file.filename,
+        "method": method,
+        "num_rows": num_rows,
+        "sensitive_column": sensitive_column,
+        "epochs": epochs,
+        "epsilon": epsilon,
+    }
 
     try:
         contents = await file.read()
@@ -59,22 +106,14 @@ async def synthesize_data(
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
 
-        # Define model parameters
-        model_params = {
-            'epochs': epochs
-        }
-
-        # TODO: Correctly integrate differential privacy (epsilon)
-        # The current SDV synthesizers don't take epsilon directly in __init__
-        # This may require using a different synthesizer or a wrapper like DP-CGAN
-        
+        model_params = {'epochs': epochs}
         generator = SyntheticGenerator(method=method, model_params=model_params)
         generator.train(clean_df)
         synthetic_data = generator.generate(num_rows)
 
         quality_report = QualityReport(clean_df, synthetic_data)
         
-        # --- Reports ---
+        # --- Build Reports ---
         stats = quality_report.compare_stats()
         privacy_check = quality_report.check_privacy()
         ks_results = quality_report.ks_test()
@@ -82,11 +121,9 @@ async def synthesize_data(
         
         fairness_results = None
         if sensitive_column and sensitive_column in synthetic_data.columns:
-            # Check if column is binary for flip test
             if synthetic_data[sensitive_column].nunique() == 2:
                 fairness_results = quality_report.flip_test(sensitive_column)
 
-        # --- Plots ---
         dist_plots = quality_report.plot_distributions()
         corr_plots = quality_report.plot_correlation_heatmaps()
         dist_plots_json = {col: fig.to_json() for col, fig in dist_plots.items()}
@@ -96,7 +133,9 @@ async def synthesize_data(
             'diff': corr_plots[2].to_json()
         }
         
-        return {
+        # --- Final Response Object ---
+        results = {
+            "config": config,
             "synthetic_data": synthetic_data.to_dict(orient='records'),
             "quality_report": {"column_stats": stats},
             "privacy_report": {**privacy_check, "dcr": dcr},
@@ -107,10 +146,60 @@ async def synthesize_data(
                 "correlations": corr_plots_json
             }
         }
+        
+        # --- Save Artifacts ---
+        save_experiment(experiment_id, config, results, synthetic_data)
+
+        return results
 
     except Exception as e:
         print(f"An error occurred during synthesis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/experiments")
+async def get_experiments():
+    """Lists all saved experiments."""
+    experiments = []
+    if not EXPERIMENTS_DIR.exists():
+        return experiments
+        
+    for exp_id in sorted(os.listdir(EXPERIMENTS_DIR), reverse=True):
+        exp_dir = EXPERIMENTS_DIR / exp_id
+        config_path = exp_dir / "config.json"
+        if exp_dir.is_dir() and config_path.exists():
+            with open(config_path, 'r') as f:
+                try:
+                    config = json.load(f)
+                    experiments.append(config)
+                except json.JSONDecodeError:
+                    print(f"Warning: Could not read config for experiment {exp_id}")
+    return experiments
+
+@app.get("/api/experiments/{experiment_id}")
+async def get_experiment(experiment_id: str):
+    """Retrieves the details for a single experiment."""
+    exp_dir = EXPERIMENTS_DIR / experiment_id
+    config_path = exp_dir / "config.json"
+    report_path = exp_dir / "report.json"
+
+    if not exp_dir.exists() or not config_path.exists() or not report_path.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found.")
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        with open(report_path, 'r') as f:
+            report = json.load(f)
+        
+        # The report already contains the config, but we merge them here
+        # to ensure consistency in case the saved report was partial.
+        # The report's content takes precedence.
+        response_data = {**config, **report}
+
+        return JSONResponse(content=response_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read experiment data: {e}")
+
 
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):
