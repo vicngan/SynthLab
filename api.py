@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List
 import uuid
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -44,25 +44,21 @@ literature_sessions = {}
 class NoteUpdate(BaseModel):
     notes: str
 
-# --- API Endpoints ---
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the SynthLab API"}
-
-@app.post("/api/synthesize")
-async def synthesize_data(
-    file: UploadFile = File(...),
-    method: str = Form("CTGAN"),
-    num_rows: int = Form(1000),
-    sensitive_column: str = Form(None),
-    epsilon: float = Form(0.0) # Add epsilon parameter
-):
-    if file.content_type != 'text/csv':
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
-
+# --- Background Task Logic ---
+def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float):
+    exp_dir = Path("experiments") / experiment_id
+    config_path = exp_dir / "config.json"
+    
     try:
-        contents = await file.read()
-        df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        # Update status to running
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            config["status"] = "running"
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=4)
+
+        df = pd.read_csv(io.StringIO(file_contents.decode('utf-8')))
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
 
@@ -85,7 +81,6 @@ async def synthesize_data(
         
         fairness_results = None
         if sensitive_column and sensitive_column in synthetic_data.columns:
-            # Check if column is binary for flip test
             if synthetic_data[sensitive_column].nunique() == 2:
                 fairness_results = quality_report.flip_test(sensitive_column)
 
@@ -93,13 +88,45 @@ async def synthesize_data(
         dist_plots = quality_report.plot_distributions()
         corr_plots = quality_report.plot_correlation_heatmaps()
         dist_plots_json = {col: fig.to_json() for col, fig in dist_plots.items()}
-        corr_plots_json = {
-            'real': corr_plots[0].to_json(),
-            'synthetic': corr_plots[1].to_json(),
-            'diff': corr_plots[2].to_json()
-        }
+        corr_plots_json = {'real': corr_plots[0].to_json(), 'synthetic': corr_plots[1].to_json(), 'diff': corr_plots[2].to_json()}
 
-        # --- Save Experiment Artifacts ---
+        # Save full report and data
+        full_report = {**config, "status": "completed", "quality_report": {"column_stats": stats}, "privacy_report": {**privacy_check, "dcr": dcr}, "fairness_report": fairness_results, "plots": {"distributions": dist_plots_json, "correlations": corr_plots_json}, "clinical_report": clinical_analysis}
+        with open(exp_dir / "report.json", "w") as f:
+            json.dump(full_report, f, indent=4)
+        
+        synthetic_data.to_csv(exp_dir / "synthetic_data.csv", index=False)
+
+    except Exception as e:
+        print(f"Task failed: {e}")
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            config["status"] = "failed"
+            config["error"] = str(e)
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=4)
+
+# --- API Endpoints ---
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the SynthLab API"}
+
+@app.post("/api/synthesize")
+async def synthesize_data(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    method: str = Form("CTGAN"),
+    num_rows: int = Form(1000),
+    sensitive_column: str = Form(None),
+    epsilon: float = Form(0.0) # Add epsilon parameter
+):
+    if file.content_type != 'text/csv':
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
+
+    try:
+        contents = await file.read()
+        
         experiment_id = f"exp_{uuid.uuid4().hex[:8]}"
         exp_dir = Path("experiments") / experiment_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -110,32 +137,16 @@ async def synthesize_data(
             "timestamp": pd.Timestamp.now().isoformat(),
             "num_rows": num_rows,
             "sensitive_column": sensitive_column,
-            "epsilon": epsilon
+            "epsilon": epsilon,
+            "status": "pending"
         }
         with open(exp_dir / "config.json", "w") as f:
             json.dump(config, f, indent=4)
 
-        # Save full report (heavy data) separately
-        full_report = {**config, "quality_report": {"column_stats": stats}, "privacy_report": {**privacy_check, "dcr": dcr}, "fairness_report": fairness_results, "plots": {"distributions": dist_plots_json, "correlations": corr_plots_json}}
-        with open(exp_dir / "report.json", "w") as f:
-            json.dump(full_report, f, indent=4)
-        
-        # Save synthetic data to CSV for download
-        synthetic_data.to_csv(exp_dir / "synthetic_data.csv", index=False)
+        # Offload heavy work to background task
+        background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon)
 
-        return {
-            "experiment_id": experiment_id,
-            "synthetic_data": synthetic_data.head(100).to_dict(orient='records'), # Return only preview
-            "clinical_report": clinical_analysis,
-            "quality_report": {"column_stats": stats},
-            "privacy_report": {**privacy_check, "dcr": dcr},
-            "statistical_similarity": {"ks_test": ks_results},
-            "fairness_report": fairness_results,
-            "plots": {
-                "distributions": dist_plots_json,
-                "correlations": corr_plots_json
-            }
-        }
+        return config
 
     except Exception as e:
         print(f"An error occurred during synthesis: {e}")
@@ -176,6 +187,10 @@ def get_experiment(experiment_id: str):
     # Load Report (contains config + stats)
     if (exp_dir / "report.json").exists():
         with open(exp_dir / "report.json", "r") as f:
+            response = json.load(f)
+    elif (exp_dir / "config.json").exists():
+        # Fallback if report isn't ready yet (pending/running)
+        with open(exp_dir / "config.json", "r") as f:
             response = json.load(f)
             
     # Load Notes
