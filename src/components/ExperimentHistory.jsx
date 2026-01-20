@@ -3,7 +3,7 @@ import axios from 'axios';
 import { History, ChevronsRight, Loader2 } from 'lucide-react';
 import ExperimentDetail from './ExperimentDetail'; // Will create this next
 
-const ExperimentHistory = () => {
+const ExperimentHistory = ({ onFork }) => {
     const [experiments, setExperiments] = useState([]);
     const [selectedExperimentId, setSelectedExperimentId] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -76,7 +76,7 @@ const ExperimentHistory = () => {
             {/* Main content area for details */}
             <div className="w-2/3">
                 {selectedExperimentId ? (
-                    <ExperimentDetail experimentId={selectedExperimentId} />
+                    <ExperimentDetail experimentId={selectedExperimentId} onFork={onFork} />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-96 bg-white rounded-xl shadow-sm border border-slate-200 text-center p-8">
                         <ChevronsRight size={48} className="text-slate-300 mb-4" />

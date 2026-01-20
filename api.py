@@ -181,6 +181,7 @@ async def get_experiment(experiment_id: str):
     exp_dir = EXPERIMENTS_DIR / experiment_id
     config_path = exp_dir / "config.json"
     report_path = exp_dir / "report.json"
+    notes_path = exp_dir / "notes.md"
 
     if not exp_dir.exists() or not config_path.exists() or not report_path.exists():
         raise HTTPException(status_code=404, detail="Experiment not found.")
@@ -191,14 +192,34 @@ async def get_experiment(experiment_id: str):
         with open(report_path, 'r') as f:
             report = json.load(f)
         
-        # The report already contains the config, but we merge them here
-        # to ensure consistency in case the saved report was partial.
-        # The report's content takes precedence.
-        response_data = {**config, **report}
+        notes = ""
+        if notes_path.exists():
+            with open(notes_path, 'r') as f:
+                notes = f.read()
+        
+        response_data = {**config, **report, "notes": notes}
 
         return JSONResponse(content=response_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read experiment data: {e}")
+
+@app.post("/api/experiments/{experiment_id}/notes")
+async def save_experiment_notes(experiment_id: str, payload: dict):
+    """Saves markdown notes for a given experiment."""
+    exp_dir = EXPERIMENTS_DIR / experiment_id
+    notes_path = exp_dir / "notes.md"
+    
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found.")
+        
+    notes = payload.get("notes", "")
+    
+    try:
+        with open(notes_path, 'w') as f:
+            f.write(notes)
+        return {"message": "Notes saved successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save notes: {e}")
 
 
 @app.post("/api/literature/upload")

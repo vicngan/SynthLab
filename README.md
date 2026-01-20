@@ -20,9 +20,10 @@ This hybrid model combines the best of both worlds: a rich, responsive user inte
 SynthLab provides a robust set of features, all accessible through an intuitive web interface.
 
 ### User Interface
+- **Experiment History / Lab Notebook**: For full reproducibility, every synthesis run is saved as an "Experiment." The History tab provides a persistent, browsable log of all previous runs, allowing you to review the exact configuration and visual reports for any experiment at any time.
 - **Interactive Visualization Dashboard**: Automatically generated after each synthesis run, this dashboard provides rich, interactive Plotly charts to visually compare the original and synthetic datasets.
 - **Hyperparameter Tuning**: Directly from the UI, you can now configure key model parameters like `Epochs` to fine-tune the performance and quality of the synthesizer (e.g., CTGAN).
-- **Tabbed Navigation**: Easily switch between the Data Generator, Literature Review, and Settings modules.
+- **Tabbed Navigation**: Easily switch between the Data Generator, History, Literature Review, and Settings modules.
 - **Responsive Design**: A clean, modern interface built with TailwindCSS that works on various screen sizes.
 
 ### Synthetic Data Engine
@@ -43,6 +44,11 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Export & API
 - **REST API**: Programmatic access to the synthesis engine via FastAPI.
 - **JSON Response**: Get synthetic data and all quality/privacy reports in a single structured format.
+
+### Collaboration & Versioning
+- **Annotation Layers**: Allow users to add Markdown notes to a generation run (e.g., "Increased privacy constraints for IRB approval").
+- **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
+- **Version Control**: Automatic saving of data, configurations, and modifications to ensure full reproducibility and lineage tracking.
 
 ---
 
@@ -93,18 +99,19 @@ The frontend will automatically open in your browser at `http://localhost:3000`.
 SynthLab/
 ├── api.py                  # FastAPI backend server
 ├── package.json            # Frontend dependencies
-├── vite.config.js          # Frontend build configuration
-├── tailwind.config.js      # UI styling configuration
 ├── requirements.txt        # Backend dependencies
-├── index.html              # Main HTML entry point for React
+├── experiments/            # Stores all experiment artifacts for reproducibility
+│   └── exp_.../
+│       ├── config.json
+│       ├── report.json
+│       ├── notes.md
+│       └── synthetic_data.csv
 ├── data/
 │   ├── raw/
-│   ├── processed/
 │   └── synthetic/
 └── src/
     ├── App.jsx             # Main React application component
-    ├── index.jsx           # React entry point
-    ├── components/         # React UI components (Results, etc.)
+    ├── components/         # React UI components
     └── modules/            # Core Python data science modules
 ```
 

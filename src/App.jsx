@@ -228,7 +228,7 @@ const App = () => {
     );
     
     const renderHistoryContent = () => (
-        <ExperimentHistory />
+        <ExperimentHistory onFork={handleForkExperiment} />
     );
 
     const renderSettingsContent = () => (
@@ -296,6 +296,23 @@ const App = () => {
             </div>
         </div>
     );
+
+    const handleForkExperiment = (config) => {
+        setSynthSettings(prevSettings => ({
+            ...prevSettings,
+            method: config.method,
+            num_rows: config.num_rows,
+            sensitive_column: config.sensitive_column || '',
+            epsilon: config.epsilon,
+            epochs: config.epochs,
+        }));
+        // Note: The original file is not re-selected automatically for security reasons.
+        // The user must re-select the file to run the forked experiment.
+        setSynthFile(null); 
+        setSynthResults(null);
+        setSynthError(null);
+        setActiveTab('generator');
+    };
 
     return (
         <div className={`h-screen w-full flex flex-col ${theme.bg} text-slate-800 font-sans`}>
