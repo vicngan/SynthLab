@@ -47,7 +47,8 @@ async def synthesize_data(
     method: str = Form("CTGAN"),
     num_rows: int = Form(1000),
     sensitive_column: str = Form(None),
-    epsilon: float = Form(0.0) # Add epsilon parameter
+    epsilon: float = Form(0.0), # Add epsilon parameter
+    epochs: int = Form(300)
 ):
     if file.content_type != 'text/csv':
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
@@ -58,8 +59,16 @@ async def synthesize_data(
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
 
-        # Pass epsilon to the generator
-        generator = SyntheticGenerator(method=method, epsilon=epsilon if epsilon > 0 else None)
+        # Define model parameters
+        model_params = {
+            'epochs': epochs
+        }
+
+        # TODO: Correctly integrate differential privacy (epsilon)
+        # The current SDV synthesizers don't take epsilon directly in __init__
+        # This may require using a different synthesizer or a wrapper like DP-CGAN
+        
+        generator = SyntheticGenerator(method=method, model_params=model_params)
         generator.train(clean_df)
         synthetic_data = generator.generate(num_rows)
 

@@ -24,11 +24,12 @@ class SyntheticGenerator: #generate synthetic data using SDv library
     }
 
 
-    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True):        #initialize synthesizer
+    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True, model_params: dict = None):        #initialize synthesizer
         """
         Args:
             method: Synthesizer method to use for generating synthetic data. Default is 'GaussianCopula'.
             apply_constraints: Whether to apply medical constraints to the generated data. Default is True.
+            model_params: A dictionary of parameters to pass to the synthesizer.
         Returns:
             None
         """
@@ -37,6 +38,7 @@ class SyntheticGenerator: #generate synthetic data using SDv library
 
         self.method = method
         self.apply_constraints = apply_constraints
+        self.model_params = model_params or {}
         self.synthesizer = None
         self.metadata = None
         
@@ -52,8 +54,11 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         self.metadata = SingleTableMetadata()
         self.metadata.detect_from_dataframe(df) #detect metadata from DataFrame
 
-        self.synthesizer = self.SYNTHESIZERS[self.method](self.metadata) #initialize synthesizer
-        print(f"Training {self.method} synthesizer...")
+        self.synthesizer = self.SYNTHESIZERS[self.method](
+            metadata=self.metadata,
+            **self.model_params
+        ) #initialize synthesizer
+        print(f"Training {self.method} synthesizer with params: {self.model_params}...")
         self.synthesizer.fit(df) #train synthesizer on DataFrame
         print(f"Synthesizer trained using {self.method} method.")   # print confirmation message    
 

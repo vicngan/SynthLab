@@ -17,26 +17,32 @@ This hybrid model combines the best of both worlds: a rich, responsive user inte
 
 ## ✨ Features
 
-The backend engine provides a robust set of features, all accessible through the new user interface:
+SynthLab provides a robust set of features, all accessible through an intuitive web interface.
+
+### User Interface
+- **Interactive Visualization Dashboard**: Automatically generated after each synthesis run, this dashboard provides rich, interactive Plotly charts to visually compare the original and synthetic datasets.
+- **Hyperparameter Tuning**: Directly from the UI, you can now configure key model parameters like `Epochs` to fine-tune the performance and quality of the synthesizer (e.g., CTGAN).
+- **Tabbed Navigation**: Easily switch between the Data Generator, Literature Review, and Settings modules.
+- **Responsive Design**: A clean, modern interface built with TailwindCSS that works on various screen sizes.
 
 ### Synthetic Data Engine
-- **3 Synthesis Methods**: GaussianCopula, CTGAN, TVAE
-- **Medical Constraints**: Automatic bounds enforcement (e.g., Age 0-120, Glucose 0-600)
+- **Multiple Synthesis Methods**: Choose between `CTGAN`, `GaussianCopula`, and `TVAE` synthesizers from the SDV library.
+- **Medical Constraints**: Automatic bounds enforcement for common clinical columns (e.g., Age 0-120, Glucose 0-600).
 
 ### Quality & Validation
-- **Statistical Comparison**: Mean, std, distribution analysis
-- **KS Test**: Kolmogorov-Smirnov test for distribution similarity
-- **Correlation Heatmaps**: Visual comparison of feature relationships
-- **Distribution Histograms**: Side-by-side real vs synthetic plots
+- **Statistical Comparison**: View key descriptive statistics (mean, std, etc.) for both real and synthetic data.
+- **Distribution Comparison**: Interactive histograms allow for a side-by-side visual assessment of column distributions.
+- **Correlation Heatmaps**: Compare the correlation matrices of the real and synthetic datasets to ensure relationships between variables are preserved.
+- **Kolmogorov-Smirnov Test**: Statistical testing for distribution similarity is included in the backend analysis.
 
 ### Privacy Analysis
-- **Leakage Detection**: Check for exact row matches
-- **Distance to Closest Record (DCR)**: Measure re-identification risk
-- **Privacy Score**: Quantified privacy assessment
+- **Leakage Detection**: Checks for any exact row matches between the real and synthetic data.
+- **Distance to Closest Record (DCR)**: A key metric to help measure the risk of re-identification.
+- **Differential Privacy (DP) Control**: An `epsilon` parameter is available in the UI as a placeholder for future DP-enabled synthesizer integration.
 
 ### Export & API
-- **REST API**: Programmatic access to the synthesis engine.
-- **JSON Response**: Get synthetic data and all reports in a structured format.
+- **REST API**: Programmatic access to the synthesis engine via FastAPI.
+- **JSON Response**: Get synthetic data and all quality/privacy reports in a single structured format.
 
 ---
 

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown } from 'lucide-react';
 import ClipLoader from "react-spinners/ClipLoader";
 import Results from './components/Results';
+import ComparisonDashboard from './components/ComparisonDashboard';
 
 const TabButton = ({ active, onClick, icon, label }) => (
   <button 
@@ -33,6 +34,7 @@ const App = () => {
         sensitive_column: '',
         domain: 'Cardiology (MIMIC-III Style)',
         epsilon: 1.2,
+        epochs: 300, // Default epochs
         outputFormat: 'csv'
     });
     const [synthFile, setSynthFile] = useState(null);
@@ -77,6 +79,7 @@ const App = () => {
         formData.append('method', synthSettings.method);
         formData.append('num_rows', synthSettings.num_rows);
         formData.append('epsilon', synthSettings.epsilon);
+        formData.append('epochs', synthSettings.epochs);
         if (synthSettings.sensitive_column) {
             formData.append('sensitive_column', synthSettings.sensitive_column);
         }
@@ -158,7 +161,12 @@ const App = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 min-h-[300px]">
                     <h2 className="text-xl font-semibold text-slate-800 mb-4">3. Results</h2>
                     {synthError && <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center"><AlertCircle className="w-5 h-5 mr-3"/>{synthError}</div>}
-                    {synthResults && <Results data={synthResults} />}
+                    {synthResults && (
+                        <>
+                            <Results data={synthResults} />
+                            <ComparisonDashboard plots={synthResults.plots} />
+                        </>
+                    )}
                 </div>
             )}
         </div>
@@ -365,6 +373,17 @@ const App = () => {
                               type="number"
                               value={synthSettings.num_rows}
                               onChange={(e) => setSynthSettings(s => ({ ...s, num_rows: parseInt(e.target.value) || 0 }))}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-violet-500 outline-none"
+                            />
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-700">Epochs</label>
+                            <input
+                              type="number"
+                              step="50"
+                              value={synthSettings.epochs}
+                              onChange={(e) => setSynthSettings(s => ({ ...s, epochs: parseInt(e.target.value) || 0 }))}
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-1 focus:ring-violet-500 outline-none"
                             />
                           </div>
