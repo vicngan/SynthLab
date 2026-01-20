@@ -1,4 +1,5 @@
 import pandas as pd 
+import warnings
 from sdv.single_table import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer
 from sdv.metadata import SingleTableMetadata
 
@@ -24,7 +25,7 @@ class SyntheticGenerator: #generate synthetic data using SDv library
     }
 
 
-    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True, model_params: dict = None):        #initialize synthesizer
+    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True, model_params: dict = None, epsilon: float = None):        #initialize synthesizer
         """
         Args:
             method: Synthesizer method to use for generating synthetic data. Default is 'GaussianCopula'.
@@ -33,12 +34,20 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         Returns:
             None
         """
+        # Suppress SDV and CTGAN warnings to clean up logs
+        warnings.filterwarnings("ignore", category=FutureWarning, module="sdv")
+        warnings.filterwarnings("ignore", category=FutureWarning, module="ctgan")
+        warnings.filterwarnings("ignore", category=UserWarning, module="sdv")
+        # Suppress joblib resource tracker warnings
+        warnings.filterwarnings("ignore", message=".*resource_tracker.*")
+
         if method not in self.SYNTHESIZERS:
             raise ValueError(f"Invalid method: {method}. Choose from {list(self.SYNTHESIZERS.keys())}.")
 
         self.method = method
         self.apply_constraints = apply_constraints
         self.model_params = model_params or {}
+        self.epsilon = epsilon
         self.synthesizer = None
         self.metadata = None
         
@@ -144,5 +153,3 @@ class SyntheticGenerator: #generate synthetic data using SDv library
             self.MEDICAL_CONSTRAINTS[column]['type'] = dtype # Update the data type for the column
 
         print(f"Added custom constraints for column {column}: {self.MEDICAL_CONSTRAINTS[column]}") # Print confirmation message
-
-

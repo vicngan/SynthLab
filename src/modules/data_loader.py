@@ -78,7 +78,7 @@ class DataLoader:
             self.available_formats.append('excel')
         except ImportError:
             if self.verbose:
-                warnings.warn("Excel support not available. Install: pip install openpyxl")
+                print("  ℹ Excel support not available. Install: pip install openpyxl")
 
         # Check SQL
         try:
@@ -86,7 +86,7 @@ class DataLoader:
             self.available_formats.append('sql')
         except ImportError:
             if self.verbose:
-                warnings.warn("SQL support not available. Install: pip install sqlalchemy")
+                print("  ℹ SQL support not available. Install: pip install sqlalchemy")
 
         # Check Feather
         try:

@@ -1,0 +1,9 @@
+{
+    "experiment_id": "exp_a01dbb33",
+    "method": "CTGAN",
+    "timestamp": "2026-01-20T17:51:48.573536",
+    "num_rows": 1000,
+    "sensitive_column": null,
+    "epsilon": 1.2,
+    "status": "running"
+}

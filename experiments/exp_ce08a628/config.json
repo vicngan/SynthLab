@@ -1,0 +1,10 @@
+{
+    "experiment_id": "exp_ce08a628",
+    "method": "CTGAN",
+    "timestamp": "2026-01-20T17:46:12.094101",
+    "num_rows": 1000,
+    "sensitive_column": null,
+    "epsilon": 1.2,
+    "status": "failed",
+    "error": "SyntheticGenerator.__init__() got an unexpected keyword argument 'epsilon'"
+}
