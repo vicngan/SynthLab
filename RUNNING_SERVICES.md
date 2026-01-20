@@ -2,7 +2,7 @@
 
 **Status:** ✅ Both services are running
 **Date:** 2026-01-19
-**UI Version:** Beautiful Theme (Light/Dark with Purple Accent)
+**UI Version:** Clinical Dark Mode (v4.0 "Clinical Precision")
 
 ---
 
@@ -14,18 +14,23 @@
 - **Status:** ✅ Running
 - **Log file:** `api.log`
 
-### 2. Streamlit Frontend (Themed)
+### 2. Streamlit Frontend (Clinical Dark Mode)
 - **URL:** http://localhost:8501
 - **Status:** ✅ Running
 - **File:** `app_theme.py`
 - **Log file:** `streamlit_theme.log`
-- **Features:**
-  - Light/Dark theme toggle
-  - Purple & white color scheme
-  - Highlighted sidebar border
-  - Search bar in top nav
-  - Pill-shaped buttons
-  - Prominent SynthLab title
+- **Design Features:**
+  - **Clinical Dark Mode** (default theme)
+  - Deep Gunmetal background (#0F172A)
+  - Medical Teal accent (#14B8A6)
+  - Bioscience Blue secondary (#3B82F6)
+  - JetBrains Mono for data/metrics (monospace)
+  - Inter for UI text (sans-serif)
+  - Glass morphism effects
+  - Glow effects on interactive elements
+  - Light/Dark theme toggle (🌙/☀️)
+  - All 5 tabs: Generate, Privacy, Literature, Cache, Users/Docs
+  - **Tagline:** "Synthetic Healthcare Data. Mathematically Validated."
 
 ---
 

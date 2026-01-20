@@ -1,12 +1,7 @@
 
   You can now view your Streamlit app in your browser.
 
-  Local URL: http://localhost:8501
   Network URL: http://192.168.68.53:8501
   External URL: http://146.75.128.227:8501
 
-  For better performance, install the Watchdog module:
-
-  $ xcode-select --install
-  $ pip install watchdog
-            
+2026-01-19 23:26:56.320 Examining the path of torch.classes raised: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_

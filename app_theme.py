@@ -1,9 +1,10 @@
 """
-SynthLab Beautiful UI - Version 2.0
-Modern design with light/dark theme, purple accent, and pill-shaped buttons
+SynthLab Clean Minimal UI - Version 3.0
+Clean, minimal design inspired by modern web aesthetics
 
 Author: SynthLab Development Team
 Created: 2026-01-19
+Updated: 2026-01-19
 """
 
 import streamlit as st
@@ -18,14 +19,13 @@ from typing import Optional, Dict, Any
 # Add src directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.modules.data_loader import DataLoader
-from src.modules.synthesizer import SyntheticGenerator
-from src.modules.stress_test import QualityReport
-from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
-from src.modules.privacy_engine import DifferentialPrivacyEngine
-from src.modules.reidentification import ReIdentificationAnalyzer
-from src.modules.constraint_manager import ConstraintManager
-from src.modules.model_cache import ModelCache
+# Lazy imports to avoid SDV compatibility issues at startup
+# Modules will be imported when needed
+LITERATURE_AVAILABLE = False
+try:
+    from src.modules.literature import LITERATURE_AVAILABLE
+except ImportError:
+    pass
 
 # API Configuration
 API_BASE_URL = "http://localhost:8000"
@@ -39,129 +39,153 @@ st.set_page_config(
 )
 
 # ============================================================================
-# THEME-AWARE CSS
+# CLEAN MINIMAL CSS
 # ============================================================================
 
 def apply_custom_css(theme='light'):
-    """Apply beautiful CSS with theme support"""
+    """Apply Clinical Dark Mode CSS - precision, trust, high-tech capability"""
 
-    # Define colors based on theme
+    # Clinical Dark Mode - Data-forward design
     if theme == 'dark':
-        bg_primary = "#1a1a2e"
-        bg_secondary = "#16213e"
-        bg_card = "#0f3460"
-        text_primary = "#ffffff"
-        text_secondary = "#b8c1ec"
-        border_color = "#533483"
-    else:  # light
-        bg_primary = "#f8f9fa"
-        bg_secondary = "#ffffff"
-        bg_card = "#ffffff"
-        text_primary = "#2d3436"
-        text_secondary = "#636e72"
-        border_color = "#9b59b6"
+        # Deep Gunmetal / Slate Grey palette
+        bg_primary = "#0F172A"      # Deep gunmetal
+        bg_secondary = "#1E293B"     # Slightly lighter slate
+        bg_card = "#334155"          # Card background
+        text_primary = "#F8FAFC"     # Almost white
+        text_secondary = "#94A3B8"   # Slate gray
+        border_color = "#475569"     # Subtle borders
+        accent_color = "#14B8A6"     # Medical Teal
+        accent_secondary = "#3B82F6" # Bioscience Blue
+        success_color = "#10B981"    # Green
+        warning_color = "#F59E0B"    # Amber
+        error_color = "#EF4444"      # Red
+    else:  # light - clinical white
+        bg_primary = "#FFFFFF"
+        bg_secondary = "#F8FAFC"
+        bg_card = "#FFFFFF"
+        text_primary = "#0F172A"
+        text_secondary = "#64748B"
+        border_color = "#E2E8F0"
+        accent_color = "#14B8A6"     # Medical Teal
+        accent_secondary = "#3B82F6" # Bioscience Blue
+        success_color = "#10B981"
+        warning_color = "#F59E0B"
+        error_color = "#EF4444"
 
     st.markdown(f"""
     <style>
-        /* Import Google Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+        /* Import fonts: Inter for UI + JetBrains Mono for data/code */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-        /* Global Styles */
+        /* Global Styles - Clinical Dark Mode */
         * {{
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }}
 
-        /* Main container */
+        /* Monospace for data, code, metrics */
+        code, pre, .metric-value, .data-display {{
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+        }}
+
+        /* Remove default padding */
         .main {{
             background: {bg_primary};
-            padding-top: 0;
+            padding: 0;
         }}
 
-        /* Top Navigation Bar */
+        .block-container {{
+            padding-top: 0;
+            padding-bottom: 2rem;
+            max-width: 100%;
+        }}
+
+        /* Top Navigation Bar - Clinical precision */
         .top-nav {{
+            position: sticky;
+            top: 0;
+            z-index: 999;
             background: {bg_secondary};
-            padding: 1rem 2rem;
-            border-bottom: 3px solid #9b59b6;
-            box-shadow: 0 2px 10px rgba(155, 89, 182, 0.2);
-            margin: -1rem -1rem 2rem -1rem;
+            padding: 1rem 3rem;
+            border-bottom: 2px solid {accent_color};
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             display: flex;
             align-items: center;
             justify-content: space-between;
-        }}
-
-        .synthlab-title {{
-            font-size: 2.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 50%, #3498db 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            display: inline-block;
-            letter-spacing: -1px;
             margin: 0;
         }}
 
-        .synthlab-subtitle {{
+        .synthlab-logo {{
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: {accent_color};
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }}
+
+        .synthlab-tagline {{
+            font-size: 0.75rem;
             color: {text_secondary};
-            font-size: 0.9rem;
-            margin-top: -0.25rem;
+            margin-left: 1rem;
+            font-weight: 400;
         }}
 
-        /* Search Bar */
-        .search-container {{
-            flex-grow: 1;
-            max-width: 500px;
-            margin: 0 2rem;
+        .nav-menu {{
+            display: flex;
+            gap: 2rem;
+            align-items: center;
         }}
 
-        .search-bar {{
-            width: 100%;
-            padding: 0.75rem 1.5rem;
-            border: 2px solid #9b59b6;
-            border-radius: 50px;
+        .nav-link {{
+            color: {text_secondary};
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+            cursor: pointer;
+        }}
+
+        .nav-link:hover {{
+            color: {text_primary};
+        }}
+
+        /* Clean buttons */
+        .clean-button {{
+            padding: 0.625rem 1.25rem;
+            border-radius: 8px;
+            border: 1px solid {border_color};
             background: {bg_card};
             color: {text_primary};
-            font-size: 0.95rem;
-            transition: all 0.3s;
-        }}
-
-        .search-bar:focus {{
-            outline: none;
-            border-color: #e74c3c;
-            box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.2);
-        }}
-
-        /* Pill-shaped buttons */
-        .pill-button {{
-            padding: 0.6rem 1.5rem;
-            border-radius: 50px;
-            border: 2px solid #9b59b6;
-            background: transparent;
-            color: #9b59b6;
-            font-weight: 600;
+            font-weight: 500;
+            font-size: 0.9rem;
             cursor: pointer;
-            transition: all 0.3s;
-            margin: 0 0.5rem;
-            display: inline-block;
+            transition: all 0.2s;
         }}
 
-        .pill-button:hover {{
-            background: #9b59b6;
+        .clean-button:hover {{
+            background: {bg_secondary};
+            border-color: {text_secondary};
+        }}
+
+        .primary-button {{
+            background: {accent_color};
             color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+            border-color: {accent_color};
         }}
 
-        .pill-button.active {{
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%);
-            color: white;
-            border-color: transparent;
+        .primary-button:hover {{
+            background: #2563eb;
+            border-color: #2563eb;
         }}
 
-        /* Sidebar - Highlighted border */
+        /* Sidebar - Clinical precision panel */
         [data-testid="stSidebar"] {{
             background: {bg_secondary};
-            border-right: 4px solid #9b59b6;
-            box-shadow: 4px 0 15px rgba(155, 89, 182, 0.2);
+            border-right: 2px solid {accent_color};
+            box-shadow: 4px 0 20px rgba(20, 184, 166, 0.2);
+            padding-top: 0;
         }}
 
         [data-testid="stSidebar"] > div:first-child {{
@@ -173,196 +197,214 @@ def apply_custom_css(theme='light'):
         }}
 
         [data-testid="stSidebar"] label {{
-            color: {text_primary} !important;
-            font-weight: 500;
+            color: {text_secondary} !important;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
 
-        /* Streamlit buttons -> Pill-shaped */
+        [data-testid="stSidebar"] h3 {{
+            color: {accent_color};
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+
+        /* Streamlit buttons - Clinical precision */
         .stButton > button {{
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%);
-            color: white;
+            background: {accent_color};
+            color: {bg_primary};
             border: none;
-            border-radius: 50px;
-            padding: 0.75rem 2rem;
+            border-radius: 6px;
+            padding: 0.75rem 1.75rem;
             font-weight: 600;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+            font-size: 0.9rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 20px rgba(20, 184, 166, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
 
         .stButton > button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(155, 89, 182, 0.4);
+            background: {accent_secondary};
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.6);
+            transform: translateY(-1px);
         }}
 
-        /* Cards */
-        .card {{
+        /* Clean cards */
+        .clean-card {{
             background: {bg_card};
-            border: 2px solid #9b59b6;
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: 0 8px 20px rgba(155, 89, 182, 0.15);
-            margin-bottom: 2rem;
-            transition: all 0.3s;
-        }}
-
-        .card:hover {{
-            transform: translateY(-4px);
-            box-shadow: 0 12px 30px rgba(155, 89, 182, 0.25);
-        }}
-
-        /* Metric Cards */
-        .metric-card {{
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%);
-            border-radius: 20px;
+            border: 1px solid {border_color};
+            border-radius: 12px;
             padding: 1.5rem;
-            color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: box-shadow 0.2s;
+        }}
+
+        .clean-card:hover {{
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        }}
+
+        /* Metric cards - Data-forward with glass morphism */
+        .metric-card {{
+            background: rgba(51, 65, 85, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid {border_color};
+            border-left: 3px solid {accent_color};
+            border-radius: 8px;
+            padding: 1.5rem;
             text-align: center;
-            box-shadow: 0 8px 20px rgba(155, 89, 182, 0.3);
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }}
 
         .metric-card:hover {{
-            transform: scale(1.05);
-            box-shadow: 0 12px 30px rgba(155, 89, 182, 0.4);
+            border-left-color: {accent_secondary};
+            box-shadow: 0 8px 16px rgba(20, 184, 166, 0.2);
+            transform: translateY(-2px);
         }}
 
         .metric-value {{
-            font-size: 2.5rem;
-            font-weight: 800;
+            font-size: 2.25rem;
+            font-weight: 600;
+            color: {accent_color};
             margin: 0.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -1px;
         }}
 
         .metric-label {{
-            font-size: 0.85rem;
+            font-size: 0.7rem;
             font-weight: 600;
-            opacity: 0.95;
+            color: {text_secondary};
             text-transform: uppercase;
             letter-spacing: 1.5px;
         }}
 
         .metric-delta {{
-            font-size: 0.9rem;
+            font-size: 0.8rem;
+            color: {text_secondary};
             margin-top: 0.5rem;
-            opacity: 0.9;
+            font-family: 'JetBrains Mono', monospace;
         }}
 
-        /* Info boxes */
+        /* Info boxes - Clinical color-coded alerts */
         .info-box {{
-            background: linear-gradient(135deg, rgba(155, 89, 182, 0.1) 0%, rgba(52, 152, 219, 0.1) 100%);
-            border-left: 4px solid #3498db;
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid {accent_secondary};
+            border-radius: 6px;
+            padding: 1rem 1.5rem;
             color: {text_primary};
             margin: 1rem 0;
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
         }}
 
         .success-box {{
-            background: linear-gradient(135deg, rgba(46, 213, 115, 0.1) 0%, rgba(72, 219, 251, 0.1) 100%);
-            border-left: 4px solid #2ed573;
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
+            background: rgba(16, 185, 129, 0.15);
+            border-left-color: {success_color};
             color: {text_primary};
-            margin: 1rem 0;
         }}
 
         .warning-box {{
-            background: linear-gradient(135deg, rgba(255, 234, 167, 0.2) 0%, rgba(253, 203, 110, 0.2) 100%);
-            border-left: 4px solid #ffa502;
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
+            background: rgba(245, 158, 11, 0.15);
+            border-left-color: {warning_color};
             color: {text_primary};
-            margin: 1rem 0;
         }}
 
         .error-box {{
-            background: linear-gradient(135deg, rgba(255, 107, 107, 0.1) 0%, rgba(238, 90, 111, 0.1) 100%);
-            border-left: 4px solid #ff6b6b;
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
+            background: rgba(239, 68, 68, 0.15);
+            border-left-color: {error_color};
             color: {text_primary};
-            margin: 1rem 0;
         }}
 
-        /* Theme toggle */
-        .theme-toggle {{
-            position: fixed;
-            top: 1rem;
-            right: 2rem;
-            z-index: 999;
-            background: {bg_card};
-            border: 2px solid #9b59b6;
-            border-radius: 50px;
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            transition: all 0.3s;
-        }}
-
-        .theme-toggle:hover {{
-            background: #9b59b6;
-            color: white;
-        }}
-
-        /* Tabs - Pill-shaped */
+        /* Tabs - Clinical precision with glow */
         .stTabs [data-baseweb="tab-list"] {{
-            gap: 12px;
-            background: transparent;
+            gap: 0.25rem;
+            background: {bg_secondary};
             margin-bottom: 2rem;
+            border-bottom: 2px solid {border_color};
+            padding: 0.5rem;
+            border-radius: 6px 6px 0 0;
         }}
 
         .stTabs [data-baseweb="tab"] {{
-            background: {bg_card};
-            border: 2px solid #9b59b6;
-            border-radius: 50px;
-            padding: 12px 28px;
-            color: {text_primary};
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.75rem 1.5rem;
+            color: {text_secondary};
             font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             transition: all 0.3s;
         }}
 
         .stTabs [data-baseweb="tab"]:hover {{
-            background: rgba(155, 89, 182, 0.1);
-            transform: translateY(-2px);
+            color: {accent_color};
+            background: rgba(20, 184, 166, 0.1);
         }}
 
         .stTabs [aria-selected="true"] {{
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%);
-            color: white;
-            border-color: transparent;
+            color: {accent_color};
+            border-bottom-color: {accent_color};
+            background: rgba(20, 184, 166, 0.15);
+            box-shadow: 0 0 15px rgba(20, 184, 166, 0.3);
         }}
 
-        /* File uploader */
+        /* File uploader - Clinical precision */
         [data-testid="stFileUploader"] {{
-            background: {bg_card};
-            border: 3px dashed #9b59b6;
-            border-radius: 20px;
-            padding: 2rem;
+            background: rgba(51, 65, 85, 0.3);
+            border: 2px dashed {accent_color};
+            border-radius: 8px;
+            padding: 2.5rem;
             transition: all 0.3s;
+            backdrop-filter: blur(5px);
         }}
 
         [data-testid="stFileUploader"]:hover {{
-            border-color: #e74c3c;
-            background: rgba(155, 89, 182, 0.05);
+            border-color: {accent_secondary};
+            background: rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
         }}
 
-        /* Dataframe */
+        /* Dataframe - Data-forward monospace */
         .dataframe {{
-            border-radius: 15px;
+            border-radius: 6px;
             overflow: hidden;
-            border: 2px solid #9b59b6;
+            border: 1px solid {border_color};
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
         }}
 
-        /* Progress bar */
+        .dataframe th {{
+            background: {bg_secondary};
+            color: {accent_color};
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }}
+
+        .dataframe td {{
+            background: {bg_card};
+            color: {text_primary};
+        }}
+
+        /* Progress bar - Clean accent */
         .stProgress > div > div {{
-            background: linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%);
+            background: {accent_color};
         }}
 
-        /* Expander */
+        /* Expander - Clean */
         .streamlit-expanderHeader {{
             background: {bg_card};
-            border-radius: 15px;
-            font-weight: 600;
+            border-radius: 8px;
+            font-weight: 500;
             color: {text_primary};
-            border: 2px solid #9b59b6;
+            border: 1px solid {border_color};
         }}
 
         /* Hide Streamlit branding */
@@ -370,21 +412,44 @@ def apply_custom_css(theme='light'):
         footer {{visibility: hidden;}}
 
         /* Text colors */
-        h1, h2, h3, h4, h5, h6, p, span, div {{
+        h1, h2, h3, h4, h5, h6 {{
+            color: {text_primary};
+            font-weight: 700;
+        }}
+
+        p, span, div {{
             color: {text_primary};
         }}
 
-        /* Inputs */
+        /* Inputs - Clean minimal */
         input, textarea, select {{
             background: {bg_card} !important;
             color: {text_primary} !important;
-            border: 2px solid #9b59b6 !important;
-            border-radius: 12px !important;
+            border: 1px solid {border_color} !important;
+            border-radius: 8px !important;
+            font-size: 0.95rem !important;
         }}
 
-        /* Sliders */
+        input:focus, textarea:focus, select:focus {{
+            border-color: {accent_color} !important;
+            outline: none !important;
+        }}
+
+        /* Sliders - Clean accent */
         .stSlider > div > div > div {{
-            background: #9b59b6 !important;
+            background: {accent_color} !important;
+        }}
+
+        /* Spacing adjustments */
+        .element-container {{
+            margin-bottom: 0.5rem;
+        }}
+
+        /* Content container */
+        .content-wrapper {{
+            padding: 2rem 3rem;
+            max-width: 1400px;
+            margin: 0 auto;
         }}
 
     </style>
@@ -403,8 +468,7 @@ def init_session_state():
         'user_info': None,
         'result': {},
         'literature_search': None,
-        'theme': 'light',  # default theme
-        'search_query': '',
+        'theme': 'dark',  # Clinical Dark Mode as default
         'privacy_settings': {
             'epsilon': 1.0,
             'delta': 1e-5,
@@ -462,58 +526,46 @@ def get_auth_headers() -> Dict[str, str]:
 
 
 # ============================================================================
-# BEAUTIFUL COMPONENTS
+# CLEAN COMPONENTS
 # ============================================================================
 
 def render_top_nav():
-    """Render top navigation bar with search and menu"""
+    """Render clinical dark mode navigation"""
 
-    # Search query state
-    if 'search_input' not in st.session_state:
-        st.session_state.search_input = ''
+    theme_emoji = "🌙" if st.session_state.theme == 'light' else "☀️"
 
     st.markdown(f"""
     <div class="top-nav">
-        <div>
-            <div class="synthlab-title">🧬 SynthLab</div>
-            <div class="synthlab-subtitle">Privacy-Safe Synthetic Data Platform</div>
+        <div style="display: flex; align-items: center;">
+            <div class="synthlab-logo">
+                <span>🧬</span>
+                <span>SynthLab</span>
+            </div>
+            <span class="synthlab-tagline">Synthetic Healthcare Data. Mathematically Validated.</span>
         </div>
-        <div class="search-container">
-            <input type="text" class="search-bar" placeholder="🔍 Search datasets, features, docs..."
-                   value="{st.session_state.search_query}" readonly>
-        </div>
-        <div>
-            <button class="pill-button" onclick="window.location.href='#generate'">Generate</button>
-            <button class="pill-button" onclick="window.location.href='#privacy'">Privacy</button>
-            <button class="pill-button" onclick="window.location.href='#docs'">Docs</button>
+        <div class="nav-menu">
+            <span class="nav-link">Generate</span>
+            <span class="nav-link">Privacy</span>
+            <span class="nav-link">Documentation</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Theme toggle in top-right
-    col1, col2 = st.columns([6, 1])
-    with col2:
-        if st.button("🌓 Theme", key="theme_toggle"):
+    # Theme toggle button
+    cols = st.columns([8, 1])
+    with cols[1]:
+        if st.button(theme_emoji, key="theme_toggle", help="Toggle theme"):
             st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
             st.rerun()
 
 
-def render_metric_card(label: str, value: str, delta: Optional[str] = None, gradient: str = "default"):
-    """Render beautiful metric card"""
-
-    if gradient == "success":
-        bg = "linear-gradient(135deg, #2ed573 0%, #48dbfb 100%)"
-    elif gradient == "warning":
-        bg = "linear-gradient(135deg, #ffa502 0%, #ff6348 100%)"
-    elif gradient == "purple":
-        bg = "linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%)"
-    else:
-        bg = "linear-gradient(135deg, #9b59b6 0%, #e74c3c 100%)"
+def render_metric_card(label: str, value: str, delta: Optional[str] = None):
+    """Render clean metric card"""
 
     delta_html = f"<div class='metric-delta'>{delta}</div>" if delta else ""
 
     st.markdown(f"""
-    <div class="metric-card" style="background: {bg};">
+    <div class="metric-card">
         <div class="metric-label">{label}</div>
         <div class="metric-value">{value}</div>
         {delta_html}
@@ -522,7 +574,7 @@ def render_metric_card(label: str, value: str, delta: Optional[str] = None, grad
 
 
 def render_info_box(text: str, type: str = "info"):
-    """Render info box"""
+    """Render clean info box"""
     st.markdown(f'<div class="{type}-box">{text}</div>', unsafe_allow_html=True)
 
 
@@ -531,30 +583,34 @@ def render_info_box(text: str, type: str = "info"):
 # ============================================================================
 
 def render_login_page():
-    """Beautiful login page"""
+    """Clinical dark mode login page"""
 
-    # Apply CSS
     apply_custom_css(st.session_state.theme)
 
     # Center content
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
 
         st.markdown("""
         <div style="text-align: center; margin-bottom: 3rem;">
-            <div class="synthlab-title" style="font-size: 4rem;">🧬 SynthLab</div>
-            <div class="synthlab-subtitle" style="font-size: 1.2rem; margin-top: 1rem;">
-                Privacy-Safe Synthetic Data Generation
+            <div style="font-size: 4rem; font-weight: 700; color: #14B8A6; margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace;">
+                🧬 SynthLab
+            </div>
+            <div style="font-size: 1.2rem; color: #94A3B8; font-weight: 500;">
+                Synthetic Healthcare Data. Mathematically Validated.
+            </div>
+            <div style="font-size: 0.9rem; color: #64748B; margin-top: 0.5rem;">
+                CTGAN • TVAE • GaussianCopula
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="clean-card">', unsafe_allow_html=True)
 
-        st.markdown("### 👋 Welcome Back")
-        st.markdown("Sign in to access the platform")
+        st.markdown("### Welcome Back")
+        st.markdown("Sign in to continue")
         st.markdown("<br>", unsafe_allow_html=True)
 
         with st.form("login_form"):
@@ -567,12 +623,12 @@ def render_login_page():
 
             if submit:
                 if username and password:
-                    with st.spinner("🔐 Authenticating..."):
+                    with st.spinner("Authenticating..."):
                         if login(username, password):
-                            st.success("✅ Welcome to SynthLab!")
+                            st.success("✓ Welcome to SynthLab")
                             st.rerun()
                         else:
-                            st.error("❌ Invalid credentials")
+                            st.error("Invalid credentials")
                 else:
                     st.warning("Please enter both username and password")
 
@@ -582,8 +638,7 @@ def render_login_page():
 
         render_info_box("""
         <strong>Default Credentials:</strong><br>
-        Username: <code>admin</code> | Password: <code>changeme123</code><br>
-        <small>⚠️ Change before production use</small>
+        Username: <code>admin</code> | Password: <code>changeme123</code>
         """, "info")
 
 
@@ -592,30 +647,29 @@ def render_login_page():
 # ============================================================================
 
 def render_sidebar():
-    """Render sidebar with highlighted border"""
+    """Render clean minimal sidebar"""
 
     with st.sidebar:
         user = st.session_state.user_info
 
-        # User profile card
+        # User profile
         st.markdown(f"""
-        <div class="card">
-            <div style="text-align: center;">
-                <div style="font-size: 4rem; margin-bottom: 1rem;">👤</div>
-                <div style="font-size: 1.3rem; font-weight: 700;">{user['username']}</div>
-                <div style="font-size: 0.9rem; opacity: 0.8; margin-top: 0.25rem;">{user['role'].title()}</div>
-                <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem;">{user['email']}</div>
-            </div>
+        <div class="clean-card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 0.75rem;">👤</div>
+            <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">{user['username']}</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">{user['role'].title()}</div>
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("🚪 Sign Out", use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if st.button("Sign Out", use_container_width=True):
             logout()
 
         st.markdown("---")
 
         # Synthesis Settings
-        st.markdown("### ⚙️ Synthesis Settings")
+        st.markdown("### ⚙️ Settings")
 
         method = st.selectbox(
             "Method",
@@ -624,7 +678,7 @@ def render_sidebar():
         )
 
         num_rows = st.slider(
-            "Synthetic Rows",
+            "Rows to Generate",
             min_value=100,
             max_value=10000,
             value=1000,
@@ -634,10 +688,10 @@ def render_sidebar():
         st.markdown("---")
 
         # Privacy Controls
-        st.markdown("### 🔒 Privacy Controls")
+        st.markdown("### 🔒 Privacy")
 
         enable_dp = st.toggle(
-            "Enable Differential Privacy",
+            "Differential Privacy",
             value=st.session_state.privacy_settings['enable_dp']
         )
         st.session_state.privacy_settings['enable_dp'] = enable_dp
@@ -653,26 +707,26 @@ def render_sidebar():
             )
             st.session_state.privacy_settings['epsilon'] = epsilon
 
-            # Privacy indicator
+            # Privacy level indicator
             if epsilon <= 0.5:
-                level, color = "🔒 Very Strong", "#2ed573"
+                level, color = "Very Strong", "#22c55e"
             elif epsilon <= 1.0:
-                level, color = "🔐 Strong", "#3498db"
+                level, color = "Strong", "#3b82f6"
             else:
-                level, color = "⚠️ Moderate", "#ffa502"
+                level, color = "Moderate", "#f59e0b"
 
             st.markdown(f"""
-            <div style="background: {color}; color: white; padding: 0.75rem;
-                        border-radius: 50px; text-align: center; margin-top: 1rem;
-                        font-weight: 600; font-size: 0.9rem;">
-                {level}
+            <div style="background: {color}20; color: {color}; padding: 0.625rem;
+                        border-radius: 8px; text-align: center; margin-top: 0.75rem;
+                        font-weight: 500; font-size: 0.85rem; border: 1px solid {color}40;">
+                {level} Privacy
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("---")
 
-        # Privacy Thresholds
-        with st.expander("📊 Privacy Metrics"):
+        # Advanced Privacy
+        with st.expander("Advanced Privacy"):
             k = st.number_input("k-anonymity", 2, 20, st.session_state.privacy_settings['k_anonymity'])
             st.session_state.privacy_settings['k_anonymity'] = k
 
@@ -683,7 +737,7 @@ def render_sidebar():
             st.session_state.privacy_settings['t_closeness'] = t
 
         enable_constraints = st.toggle(
-            "Apply Constraints",
+            "Constraints",
             value=st.session_state.privacy_settings['enable_constraints']
         )
         st.session_state.privacy_settings['enable_constraints'] = enable_constraints
@@ -713,12 +767,15 @@ def main():
     # Render sidebar
     method, num_rows = render_sidebar()
 
-    # Main content
-    tabs = st.tabs(["🎨 Generate", "🔒 Privacy", "💾 Cache", "👥 Users" if st.session_state.user_info['role'] == 'admin' else "📚 Docs"])
+    # Main content wrapper
+    st.markdown('<div class="content-wrapper">', unsafe_allow_html=True)
+
+    # Main content tabs - Include Literature tab
+    tabs = st.tabs(["Generate", "Privacy Analysis", "Literature", "Cache", "Users" if st.session_state.user_info['role'] == 'admin' else "Docs"])
 
     # TAB 1: GENERATE
     with tabs[0]:
-        st.markdown("### 📁 Upload Your Data")
+        st.markdown("### Upload Dataset")
 
         uploaded_file = st.file_uploader(
             "Drop CSV file here or click to browse",
@@ -729,7 +786,7 @@ def main():
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
 
-            # Quick stats
+            # Stats
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 render_metric_card("Rows", f"{df.shape[0]:,}")
@@ -741,13 +798,19 @@ def main():
                 render_metric_card("Method", method)
 
             # Preview
-            with st.expander("👁️ Data Preview", expanded=True):
+            with st.expander("Preview Data", expanded=True):
                 st.dataframe(df.head(10), use_container_width=True)
 
-            # Generate button
-            if st.button("🚀 Generate Synthetic Data", use_container_width=True, type="primary"):
-                with st.spinner("✨ Creating synthetic data..."):
+            # Generate
+            if st.button("Generate Synthetic Data", use_container_width=True, type="primary"):
+                with st.spinner("Creating synthetic data..."):
                     try:
+                        # Lazy import modules when needed
+                        from src.modules.data_loader import DataLoader
+                        from src.modules.synthesizer import SyntheticGenerator
+                        from src.modules.privacy_engine import DifferentialPrivacyEngine
+                        from src.modules.constraint_manager import ConstraintManager
+
                         loader = DataLoader(verbose=False)
                         clean_df, cols = loader.clean_data(df)
 
@@ -780,11 +843,11 @@ def main():
                             'method': method
                         }
 
-                        render_info_box(f"✅ <strong>Success!</strong> Generated {len(synthetic_data):,} synthetic rows", "success")
+                        render_info_box(f"✓ Successfully generated {len(synthetic_data):,} synthetic rows", "success")
                         st.rerun()
 
                     except Exception as e:
-                        render_info_box(f"❌ <strong>Error:</strong> {str(e)}", "error")
+                        render_info_box(f"✗ Error: {str(e)}", "error")
 
             # Results
             if uploaded_file.name in st.session_state.result:
@@ -793,7 +856,10 @@ def main():
                 clean_df = result['clean_data']
 
                 st.markdown("---")
-                st.markdown("### 📊 Results")
+                st.markdown("### Results")
+
+                # Lazy import
+                from src.modules.stress_test import QualityReport
 
                 quality_report = QualityReport(clean_df, synthetic_data)
                 privacy_check = quality_report.check_privacy()
@@ -805,40 +871,37 @@ def main():
                     render_metric_card(
                         "Privacy Score",
                         f"{100 - privacy_check['leaked_percentage']:.0f}%",
-                        "✓ No leaks" if privacy_check['leaked_rows'] == 0 else f"⚠ {privacy_check['leaked_rows']} leaks",
-                        gradient="success" if privacy_check['leaked_rows'] == 0 else "warning"
+                        "No leaks" if privacy_check['leaked_rows'] == 0 else f"{privacy_check['leaked_rows']} leaks"
                     )
 
                 with col2:
                     render_metric_card(
                         "Mean DCR",
                         f"{dcr['mean_distance']:.3f}",
-                        "✓ Good" if dcr['mean_distance'] > 0.1 else "⚠ Low",
-                        gradient="success" if dcr['mean_distance'] > 0.1 else "warning"
+                        "Good" if dcr['mean_distance'] > 0.1 else "Low"
                     )
 
                 with col3:
                     dp_enabled = st.session_state.privacy_settings['enable_dp']
                     render_metric_card(
                         "Diff Privacy",
-                        "✓ ON" if dp_enabled else "✗ OFF",
-                        f"ε={st.session_state.privacy_settings['epsilon']}" if dp_enabled else "Disabled",
-                        gradient="success" if dp_enabled else "warning"
+                        "ON" if dp_enabled else "OFF",
+                        f"ε={st.session_state.privacy_settings['epsilon']}" if dp_enabled else "Disabled"
                     )
 
                 with col4:
                     render_metric_card(
-                        "Rows Created",
+                        "Generated",
                         f"{len(synthetic_data):,}",
                         method
                     )
 
-                with st.expander("🔬 Synthetic Data", expanded=False):
+                with st.expander("View Synthetic Data"):
                     st.dataframe(synthetic_data.head(20), use_container_width=True)
 
                 csv = synthetic_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="📥 Download Synthetic Data",
+                    label="Download Synthetic Data (CSV)",
                     data=csv,
                     file_name=f'synthetic_{uploaded_file.name}',
                     mime='text/csv',
@@ -847,10 +910,10 @@ def main():
 
     # TAB 2: PRIVACY
     with tabs[1]:
-        st.markdown("### 🔒 Privacy Analysis")
+        st.markdown("### Privacy Analysis")
 
         if not st.session_state.result:
-            render_info_box("ℹ️ Generate synthetic data first to access privacy analysis", "info")
+            render_info_box("Generate synthetic data first to access privacy analysis", "info")
         else:
             dataset_name = st.selectbox("Select Dataset", list(st.session_state.result.keys()))
 
@@ -858,6 +921,9 @@ def main():
                 result = st.session_state.result[dataset_name]
                 clean_df = result['clean_data']
                 synthetic_df = result['synthetic_data']
+
+                # Lazy import
+                from src.modules.stress_test import QualityReport
 
                 quality_report = QualityReport(clean_df, synthetic_df)
                 privacy_check = quality_report.check_privacy()
@@ -869,38 +935,85 @@ def main():
                     render_metric_card(
                         "Privacy Score",
                         f"{100 - privacy_check['leaked_percentage']:.1f}%",
-                        f"{privacy_check['leaked_rows']} exact matches",
-                        gradient="success" if privacy_check['leaked_rows'] == 0 else "warning"
+                        f"{privacy_check['leaked_rows']} exact matches"
                     )
 
                 with col2:
                     render_metric_card(
                         "Mean DCR",
                         f"{dcr['mean_distance']:.4f}",
-                        f"Min: {dcr['min_distance']:.4f}",
-                        gradient="success" if dcr['mean_distance'] > 0.1 else "warning"
+                        f"Min: {dcr['min_distance']:.4f}"
                     )
 
                 with col3:
                     render_metric_card(
                         "Too Close",
                         f"{dcr['too_close_percentage']:.1f}%",
-                        f"{dcr['close_records']} records",
-                        gradient="success" if dcr['too_close_percentage'] < 5 else "warning"
+                        f"{dcr['close_records']} records"
                     )
 
-                st.markdown("#### 💡 Recommendations")
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("#### Recommendations")
 
                 if privacy_check['leaked_rows'] == 0 and dcr['mean_distance'] > 0.1:
-                    render_info_box("✅ <strong>Excellent Privacy!</strong> No exact matches and good separation.", "success")
+                    render_info_box("✓ Excellent privacy - No exact matches and good separation", "success")
                 elif privacy_check['leaked_rows'] > 0:
-                    render_info_box(f"⚠️ <strong>Risk:</strong> {privacy_check['leaked_rows']} exact matches. Enable DP.", "error")
+                    render_info_box(f"⚠ Risk detected - {privacy_check['leaked_rows']} exact matches found. Enable differential privacy", "error")
                 else:
-                    render_info_box("⚠️ <strong>Low DCR:</strong> Some records too similar. Adjust parameters.", "warning")
+                    render_info_box("⚠ Low DCR - Some records are too similar. Consider adjusting parameters", "warning")
 
-    # TAB 3: CACHE
+    # TAB 3: LITERATURE
     with tabs[2]:
-        st.markdown("### 💾 Model Cache")
+        st.markdown("### Literature Search")
+
+        if LITERATURE_AVAILABLE:
+            query = st.text_input("Search for papers related to synthetic data", placeholder="e.g., differential privacy, CTGAN, GAN-based synthesis")
+
+            if st.button("Search Papers"):
+                if query:
+                    with st.spinner("Searching literature..."):
+                        # Lazy import
+                        from src.modules.literature import LiteratureSearch
+
+                        if st.session_state.literature_search is None:
+                            st.session_state.literature_search = LiteratureSearch()
+
+                        results = st.session_state.literature_search.search(query, max_results=10)
+
+                        if results:
+                            render_info_box(f"✓ Found {len(results)} papers", "success")
+
+                            for i, paper in enumerate(results, 1):
+                                st.markdown(f"""
+                                <div class="clean-card">
+                                    <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem;">
+                                        {i}. {paper['title']}
+                                    </div>
+                                    <div style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.5rem;">
+                                        <strong>Authors:</strong> {paper['authors']}
+                                    </div>
+                                    <div style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.75rem;">
+                                        <strong>Published:</strong> {paper['published']} | <strong>Citations:</strong> {paper.get('citations', 'N/A')}
+                                    </div>
+                                    <div style="font-size: 0.9rem; margin-bottom: 0.75rem;">
+                                        {paper['summary']}
+                                    </div>
+                                    <a href="{paper['url']}" target="_blank" style="color: #3b82f6; text-decoration: none; font-size: 0.9rem;">
+                                        → Read full paper
+                                    </a>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                        else:
+                            render_info_box("No papers found. Try a different query.", "info")
+                else:
+                    st.warning("Please enter a search query")
+        else:
+            render_info_box("Literature search is not available. Install required dependencies: `pip install arxiv scholarly`", "warning")
+
+    # TAB 4: CACHE
+    with tabs[3]:
+        st.markdown("### Model Cache")
 
         cache_dir = Path("cache/models")
         if cache_dir.exists():
@@ -928,14 +1041,14 @@ def main():
 
                 st.dataframe(pd.DataFrame(cache_data), use_container_width=True)
             else:
-                render_info_box("ℹ️ No cached models yet.", "info")
+                render_info_box("No cached models yet", "info")
         else:
-            render_info_box("ℹ️ Cache will be created on first generation.", "info")
+            render_info_box("Cache will be created on first generation", "info")
 
-    # TAB 4: USERS/DOCS
-    with tabs[3]:
+    # TAB 5: USERS/DOCS
+    with tabs[4]:
         if st.session_state.user_info['role'] == 'admin':
-            st.markdown("### 👥 User Management")
+            st.markdown("### User Management")
 
             with st.form("create_user"):
                 col1, col2 = st.columns(2)
@@ -961,20 +1074,22 @@ def main():
 
                         if response.status_code == 200:
                             user_data = response.json()
-                            render_info_box(f"✅ <strong>User Created!</strong><br>Username: {new_username}<br>API Key: <code>{user_data['api_key']}</code>", "success")
+                            render_info_box(f"✓ User created: {new_username}<br>API Key: <code>{user_data['api_key']}</code>", "success")
                         else:
-                            render_info_box(f"❌ Error: {response.json().get('detail')}", "error")
+                            render_info_box(f"✗ Error: {response.json().get('detail')}", "error")
                     except Exception as e:
-                        render_info_box(f"❌ Error: {str(e)}", "error")
+                        render_info_box(f"✗ Error: {str(e)}", "error")
         else:
-            st.markdown("### 📚 Documentation")
+            st.markdown("### Documentation")
             render_info_box("""
             <strong>Quick Start:</strong><br>
             1. Upload CSV in Generate tab<br>
-            2. Configure privacy settings<br>
+            2. Configure privacy settings in sidebar<br>
             3. Click Generate<br>
             4. Analyze privacy metrics
             """, "info")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
