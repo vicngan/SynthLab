@@ -56,7 +56,7 @@ const Results = ({ data }) => {
             case 'quality': return <QualityReport data={data.quality_report} />;
             case 'privacy': return <PrivacyReport data={data.privacy_report} />;
             case 'fairness': return <FairnessReport data={data.fairness_report} />;
-            case 'plots': return <Plots data={data.plots} />;
+            case 'visualizations': return <Visualizations data={data.plots} />;
             default: return null;
         }
     };
@@ -67,9 +67,9 @@ const Results = ({ data }) => {
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
                     <TabButton isActive={activeTab === 'data'} onClick={() => setActiveTab('data')}>Synthetic Data</TabButton>
                     <TabButton isActive={activeTab === 'quality'} onClick={() => setActiveTab('quality')}>Quality</TabButton>
+                    <TabButton isActive={activeTab === 'visualizations'} onClick={() => setActiveTab('visualizations')}>Visualizations</TabButton>
                     <TabButton isActive={activeTab === 'privacy'} onClick={() => setActiveTab('privacy')}>Privacy</TabButton>
                     {data.fairness_report && <TabButton isActive={activeTab === 'fairness'} onClick={() => setActiveTab('fairness')}>Fairness</TabButton>}
-                    <TabButton isActive={activeTab === 'plots'} onClick={() => setActiveTab('plots')}>Plots</TabButton>
                 </nav>
             </div>
             <div className="mt-6">{renderActiveTab()}</div>
@@ -192,7 +192,7 @@ const FairnessReport = ({ data }) => (
     </SafeComponent>
 );
 
-const Plots = ({ data }) => {
+const Visualizations = ({ data }) => {
     const correlations = data?.correlations;
     const distributions = data?.distributions;
     const distributionKeys = distributions ? Object.keys(distributions) : [];
@@ -203,18 +203,31 @@ const Plots = ({ data }) => {
                 <SafeComponent data={correlations}>
                     <div>
                         <h3 className="text-lg font-semibold text-slate-800 mb-4">Correlation Heatmaps</h3>
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Real Data</h4><PlotlyFigure jsonFigure={correlations?.real} /></div>
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Synthetic Data</h4><PlotlyFigure jsonFigure={correlations?.synthetic} /></div>
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                                <h4 className="text-sm font-medium text-center mb-2">Original Data</h4>
+                                <PlotlyFigure jsonFigure={correlations?.real} />
+                            </div>
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                                <h4 className="text-sm font-medium text-center mb-2">Synthetic Data</h4>
+                                <PlotlyFigure jsonFigure={correlations?.synthetic} />
+                            </div>
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                                <h4 className="text-sm font-medium text-center mb-2">Difference</h4>
+                                <PlotlyFigure jsonFigure={correlations?.diff} />
+                            </div>
                         </div>
                     </div>
                 </SafeComponent>
                 <SafeComponent data={distributions}>
                     <div>
                         <h3 className="text-lg font-semibold text-slate-800 mb-4">Column Distributions</h3>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {distributionKeys.map(col => (
-                                <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg"><PlotlyFigure jsonFigure={distributions[col]} /></div>
+                                <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg">
+                                    <h4 className="text-sm font-medium text-center mb-2 capitalize">{col.replace(/_/g, ' ')}</h4>
+                                    <PlotlyFigure jsonFigure={distributions[col]} />
+                                </div>
                             ))}
                         </div>
                     </div>

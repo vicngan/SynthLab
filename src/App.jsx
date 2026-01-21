@@ -3,7 +3,6 @@ import axios from 'axios';
 import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown, History } from 'lucide-react';
 import ClipLoader from "react-spinners/ClipLoader";
 import Results from './components/Results';
-import ComparisonDashboard from './components/ComparisonDashboard';
 import ExperimentHistory from './components/ExperimentHistory';
 
 const TabButton = ({ active, onClick, icon, label }) => (
@@ -209,10 +208,7 @@ const App = () => {
                     <h2 className="text-xl font-semibold text-slate-800 mb-4">3. Results</h2>
                     {synthError && <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center"><AlertCircle className="w-5 h-5 mr-3"/>{synthError}</div>}
                     {synthResults && (
-                        <>
-                            <Results data={synthResults} />
-                            <ComparisonDashboard plots={synthResults.plots} />
-                        </>
+                        <Results data={synthResults} />
                     )}
                 </div>
             )}
