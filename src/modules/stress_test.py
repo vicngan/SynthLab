@@ -24,27 +24,47 @@ class QualityReport:
     def compare_stats(self) -> Dict:
         """Compare basic statistics between real and synthetic data"""
         report = {}
-        
-        for col in self.real_df.select_dtypes(include=['number']).columns: 
-            real_mean = self.real_df[col].mean()
-            synth_mean = self.synthetic_df[col].mean()
 
-            real_std = self.real_df[col].std()
-            synth_std = self.synthetic_df[col].std()        
-
-            #percent difference calculation
-            mean_diff = abs(real_mean - synth_mean) / abs(real_mean) * 100 if real_mean != 0 else np.nan
-            std_diff = abs(real_std - synth_std) / abs(real_std) * 100 if real_std != 0 else np.nan
+        # Handle numeric columns
+        numeric_cols = self.real_df.select_dtypes(include=['number']).columns
+        for col in numeric_cols:
+            real_stats = self.real_df[col].describe()
+            synth_stats = self.synthetic_df[col].describe()
 
             report[col] = {
+                'type': 'numeric',
                 'unit': self.UNITS.get(col, ''),
-                'real_mean': round(real_mean, 2),
-                'synth_mean': round(synth_mean, 2),
-                'mean_diff_%': mean_diff,
-                'real_std': round(real_std, 2),
-                'synth_std': round(synth_std, 2),
-                'std_diff_%': round(std_diff, 2)
+                'mean': synth_stats.get('mean'),
+                'std': synth_stats.get('std'),
+                'min': synth_stats.get('min'),
+                '25%': synth_stats.get('25%'),
+                '50%': synth_stats.get('50%'),
+                '75%': synth_stats.get('75%'),
+                'max': synth_stats.get('max'),
+                'real_mean': real_stats.get('mean'),
+                'real_std': real_stats.get('std'),
+                'synth_mean': synth_stats.get('mean'),
+                'synth_std': synth_stats.get('std'),
             }
+
+        # Handle categorical columns
+        categorical_cols = self.real_df.select_dtypes(include=['object', 'category']).columns
+        for col in categorical_cols:
+            real_counts = self.real_df[col].value_counts(normalize=True)
+            synth_counts = self.synthetic_df[col].value_counts(normalize=True)
+
+            # Get top categories
+            top_real = real_counts.head(5).to_dict()
+            top_synth = synth_counts.head(5).to_dict()
+
+            report[col] = {
+                'type': 'categorical',
+                'unique_real': int(self.real_df[col].nunique()),
+                'unique_synth': int(self.synthetic_df[col].nunique()),
+                'top_categories_real': {str(k): round(v * 100, 2) for k, v in top_real.items()},
+                'top_categories_synth': {str(k): round(v * 100, 2) for k, v in top_synth.items()},
+            }
+
         return report
             
     def plot_distributions(self):

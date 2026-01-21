@@ -99,30 +99,78 @@ const QualityReport = ({ data }) => {
     const columnStats = data?.column_stats;
     const columns = columnStats ? Object.keys(columnStats) : [];
 
+    // Separate numeric and categorical columns
+    const numericCols = columns.filter(col => columnStats[col]?.type === 'numeric');
+    const categoricalCols = columns.filter(col => columnStats[col]?.type === 'categorical');
+
     return (
         <SafeComponent data={columnStats}>
-            <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800">Column Statistics Comparison</h3>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 border border-slate-200 rounded-lg">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Metric</th>
-                                {columns.map(col => <th key={col} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{col}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-slate-200">
-                            {['mean', 'std', 'min', '25%', '50%', '75%', 'max'].map(metric => (
-                                <tr key={metric}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{metric}</td>
-                                    {columns.map(col => (
-                                        <td key={col} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{columnStats[col]?.[metric] != null ? columnStats[col][metric].toFixed(4) : 'N/A'}</td>
+            <div className="space-y-8">
+                {/* Numeric Columns Table */}
+                {numericCols.length > 0 && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Numeric Column Statistics (Synthetic Data)</h3>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-slate-200 border border-slate-200 rounded-lg">
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Metric</th>
+                                        {numericCols.map(col => <th key={col} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{col}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-slate-200">
+                                    {['mean', 'std', 'min', '25%', '50%', '75%', 'max'].map(metric => (
+                                        <tr key={metric}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{metric}</td>
+                                            {numericCols.map(col => (
+                                                <td key={col} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
+                                                    {columnStats[col]?.[metric] != null ? columnStats[col][metric].toFixed(4) : 'N/A'}
+                                                </td>
+                                            ))}
+                                        </tr>
                                     ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Categorical Columns */}
+                {categoricalCols.length > 0 && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Categorical Column Distribution</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {categoricalCols.map(col => {
+                                const stats = columnStats[col];
+                                return (
+                                    <div key={col} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                        <h4 className="font-semibold text-slate-800 mb-2">{col}</h4>
+                                        <p className="text-xs text-slate-500 mb-3">
+                                            Unique values: Real ({stats?.unique_real}) / Synthetic ({stats?.unique_synth})
+                                        </p>
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-medium text-slate-600">Top Categories (Synthetic):</p>
+                                            {stats?.top_categories_synth && Object.entries(stats.top_categories_synth).map(([cat, pct]) => (
+                                                <div key={cat} className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-slate-200 rounded-full h-2">
+                                                        <div className="bg-teal-500 h-2 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }}></div>
+                                                    </div>
+                                                    <span className="text-xs text-slate-600 w-24 truncate" title={cat}>{cat}</span>
+                                                    <span className="text-xs text-slate-500 w-12 text-right">{pct}%</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* No data message */}
+                {numericCols.length === 0 && categoricalCols.length === 0 && (
+                    <div className="p-4 text-sm text-slate-500 bg-slate-50 rounded-md">No column statistics available.</div>
+                )}
             </div>
         </SafeComponent>
     );
@@ -199,34 +247,44 @@ const Visualizations = ({ data }) => {
 
     return (
         <SafeComponent data={data}>
-            <div className="space-y-8">
+            <div className="space-y-10">
                 <SafeComponent data={correlations}>
                     <div>
-                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Correlation Heatmaps</h3>
-                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
-                                <h4 className="text-sm font-medium text-center mb-2">Original Data</h4>
-                                <PlotlyFigure jsonFigure={correlations?.real} />
+                        <h3 className="text-lg font-semibold text-slate-800 mb-6">Correlation Heatmaps</h3>
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="bg-white p-4 border border-slate-200 rounded-lg" style={{ minHeight: '450px' }}>
+                                    <h4 className="text-sm font-semibold text-center mb-4 text-slate-700">Original Data</h4>
+                                    <div style={{ height: '400px' }}>
+                                        <PlotlyFigure jsonFigure={correlations?.real} />
+                                    </div>
+                                </div>
+                                <div className="bg-white p-4 border border-slate-200 rounded-lg" style={{ minHeight: '450px' }}>
+                                    <h4 className="text-sm font-semibold text-center mb-4 text-slate-700">Synthetic Data</h4>
+                                    <div style={{ height: '400px' }}>
+                                        <PlotlyFigure jsonFigure={correlations?.synthetic} />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
-                                <h4 className="text-sm font-medium text-center mb-2">Synthetic Data</h4>
-                                <PlotlyFigure jsonFigure={correlations?.synthetic} />
-                            </div>
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
-                                <h4 className="text-sm font-medium text-center mb-2">Difference</h4>
-                                <PlotlyFigure jsonFigure={correlations?.diff} />
+                            <div className="bg-white p-4 border border-slate-200 rounded-lg" style={{ minHeight: '450px' }}>
+                                <h4 className="text-sm font-semibold text-center mb-4 text-slate-700">Difference (Original - Synthetic)</h4>
+                                <div style={{ height: '400px' }}>
+                                    <PlotlyFigure jsonFigure={correlations?.diff} />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </SafeComponent>
                 <SafeComponent data={distributions}>
                     <div>
-                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Column Distributions</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-6">Column Distributions</h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {distributionKeys.map(col => (
-                                <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg">
-                                    <h4 className="text-sm font-medium text-center mb-2 capitalize">{col.replace(/_/g, ' ')}</h4>
-                                    <PlotlyFigure jsonFigure={distributions[col]} />
+                                <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg" style={{ minHeight: '350px' }}>
+                                    <h4 className="text-sm font-semibold text-center mb-4 text-slate-700 capitalize">{col.replace(/_/g, ' ')}</h4>
+                                    <div style={{ height: '300px' }}>
+                                        <PlotlyFigure jsonFigure={distributions[col]} />
+                                    </div>
                                 </div>
                             ))}
                         </div>
