@@ -48,7 +48,7 @@ class NoteUpdate(BaseModel):
     notes: str
 
 # --- Background Task Logic ---
-def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float):
+def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float, sequence_key: str = None, sequence_index: str = None):
     exp_dir = Path("experiments") / experiment_id
     config_path = exp_dir / "config.json"
     
@@ -73,7 +73,12 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         clinical_analysis = clinical_analyzer.analyze_columns(clean_df)
 
         # Pass epsilon to the generator
-        generator = SyntheticGenerator(method=method, epsilon=epsilon if epsilon > 0 else None)
+        generator = SyntheticGenerator(
+            method=method, 
+            epsilon=epsilon if epsilon > 0 else None,
+            sequence_key=sequence_key,
+            sequence_index=sequence_index
+        )
         generator.train(clean_df)
         synthetic_data = generator.generate(num_rows)
 
@@ -129,7 +134,9 @@ async def synthesize_data(
     method: str = Form("CTGAN"),
     num_rows: int = Form(1000),
     sensitive_column: str = Form(None),
-    epsilon: float = Form(0.0) # Add epsilon parameter
+    epsilon: float = Form(0.0), # Add epsilon parameter
+    sequence_key: str = Form(None), # Column for Entity ID (e.g., PatientID)
+    sequence_index: str = Form(None) # Column for Time/Order (e.g., VisitDate)
 ):
     if file.content_type != 'text/csv':
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
@@ -148,6 +155,8 @@ async def synthesize_data(
             "num_rows": num_rows,
             "sensitive_column": sensitive_column,
             "epsilon": epsilon,
+            "sequence_key": sequence_key,
+            "sequence_index": sequence_index,
             "status": "pending",
             # Add placeholders to prevent frontend crashes while processing
             "synthetic_data": [],
@@ -163,7 +172,7 @@ async def synthesize_data(
         jobs[experiment_id] = {"status": "pending", "experiment_id": experiment_id}
 
         # Offload heavy work to background task
-        background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon)
+        background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon, sequence_key, sequence_index)
 
         return {"job_id": experiment_id, "status": "pending"}
 

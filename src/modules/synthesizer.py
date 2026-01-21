@@ -1,6 +1,7 @@
 import pandas as pd 
 import warnings
 from sdv.single_table import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer
+from sdv.sequential import PARSynthesizer
 from sdv.metadata import SingleTableMetadata
 
 class SyntheticGenerator: #generate synthetic data using SDv library
@@ -8,7 +9,8 @@ class SyntheticGenerator: #generate synthetic data using SDv library
     SYNTHESIZERS = {
         'GaussianCopula': GaussianCopulaSynthesizer,
         'CTGAN': CTGANSynthesizer,
-        'TVAE': TVAESynthesizer # Add more synthesizers if needed
+        'TVAE': TVAESynthesizer,
+        'PAR': PARSynthesizer # Probabilistic AutoRegressive for sequential data
     }
 
     # Medical constraints for common healthcare columns
@@ -25,7 +27,7 @@ class SyntheticGenerator: #generate synthetic data using SDv library
     }
 
 
-    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True, model_params: dict = None, epsilon: float = None):        #initialize synthesizer
+    def __init__(self, method: str = 'GaussianCopula', apply_constraints: bool = True, model_params: dict = None, epsilon: float = None, sequence_key: str = None, sequence_index: str = None):        #initialize synthesizer
         """
         Args:
             method: Synthesizer method to use for generating synthetic data. Default is 'GaussianCopula'.
@@ -48,6 +50,8 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         self.apply_constraints = apply_constraints
         self.model_params = model_params or {}
         self.epsilon = epsilon
+        self.sequence_key = sequence_key
+        self.sequence_index = sequence_index
         self.synthesizer = None
         self.metadata = None
         
@@ -62,6 +66,17 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         """
         self.metadata = SingleTableMetadata()
         self.metadata.detect_from_dataframe(df) #detect metadata from DataFrame
+
+        # Configure metadata for Sequential (PAR) models
+        if self.method == 'PAR':
+            if not self.sequence_key:
+                raise ValueError("PAR synthesizer requires a sequence_key (e.g., PatientID) to identify sequences.")
+            
+            self.metadata.update_column(self.sequence_key, sdtype='id')
+            self.metadata.set_sequence_key(self.sequence_key)
+            
+            if self.sequence_index:
+                self.metadata.set_sequence_index(self.sequence_index)
 
         self.synthesizer = self.SYNTHESIZERS[self.method](
             metadata=self.metadata,
@@ -119,8 +134,13 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         if self.synthesizer is None:
             raise RuntimeError("Synthesizer has not been trained. Call train() before generate().")
 
-        print(f"Generating {count} synthetic rows...")
-        synthetic_df = self.synthesizer.sample(num_rows=count) #generate synthetic data
+        if self.method == 'PAR':
+            # For PAR, count refers to the number of sequences (e.g., patients), not total rows
+            print(f"Generating {count} synthetic sequences (entities) using PAR...")
+            synthetic_df = self.synthesizer.sample(num_sequences=count)
+        else:
+            print(f"Generating {count} synthetic rows...")
+            synthetic_df = self.synthesizer.sample(num_rows=count) #generate synthetic data
     
         if self.apply_constraints:
             synthetic_df = self._apply_constraints(synthetic_df) #apply medical constraints
