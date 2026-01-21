@@ -49,6 +49,11 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **Smart Type Detection**: Automatically identifies clinical columns (e.g., HbA1c, Glucose) and suggests appropriate physiological bounds and distributions.
 - **ICD-10 Support**: Specialized validation for hierarchical medical codes to ensure synthetic data adheres to standard medical coding formats.
 
+### Literature Intelligence
+- **PDF Knowledge Base**: Upload and index research papers (PDFs) to create a searchable local library.
+- **Semantic Search**: Use natural language queries to find relevant sections across your uploaded literature.
+- **AI Summarization**: Generate summaries of search results to quickly understand the state of the art (requires Anthropic API key).
+
 ### Collaboration & Versioning
 - **Annotation Layers**: Allow users to add Markdown notes to a generation run (e.g., "Increased privacy constraints for IRB approval").
 - **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
@@ -77,6 +82,9 @@ source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 
 # Install Python dependencies
 pip install -r requirements.txt
+
+# (Optional) Create a .env file for API keys
+# echo "ANTHROPIC_API_KEY=your_key_here" > .env
 
 # Start the backend server
 uvicorn api:app --reload

@@ -138,7 +138,13 @@ async def synthesize_data(
             "num_rows": num_rows,
             "sensitive_column": sensitive_column,
             "epsilon": epsilon,
-            "status": "pending"
+            "status": "pending",
+            # Add placeholders to prevent frontend crashes while processing
+            "synthetic_data": [],
+            "plots": None,
+            "quality_report": {},
+            "privacy_report": {},
+            "clinical_report": {}
         }
         with open(exp_dir / "config.json", "w") as f:
             json.dump(config, f, indent=4)

@@ -77,11 +77,11 @@ const DataTable = ({ data }) => (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 border border-slate-200 rounded-lg">
                 <thead className="bg-slate-50">
-                    <tr>{Object.keys(data[0]).map(h => <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{h}</th>)}</tr>
+                    <tr>{data && data[0] ? Object.keys(data[0]).map(h => <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{h}</th>) : null}</tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">
-                    {data.slice(0, 100).map((row, i) => (
-                        <tr key={i}>{Object.keys(row).map(h => <td key={h} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{row[h]}</td>)}</tr>
+                    {Array.isArray(data) && data.slice(0, 100).map((row, i) => (
+                        <tr key={i}>{row ? Object.keys(row).map(h => <td key={h} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{row[h]}</td>) : null}</tr>
                     ))}
                 </tbody>
             </table>

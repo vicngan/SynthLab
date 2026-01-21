@@ -55,7 +55,8 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
     if (error) return <div className="p-8 text-red-500 flex items-center gap-2"><AlertCircle /> {error}</div>;
     if (!experiment) return null;
 
-    const { config } = experiment;
+    // Handle both flat and nested config structures safely
+    const config = experiment?.config || experiment;
 
     return (
         <div className="space-y-8">
@@ -67,15 +68,17 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
                         <span>Configuration</span>
                     </h3>
                     <div className="flex gap-2">
+                        {config?.status === 'completed' && (
+                            <button 
+                                onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/download`, '_blank')}
+                                className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
+                            >
+                                <Download size={14} />
+                                Download CSV
+                            </button>
+                        )}
                         <button 
-                            onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/download`, '_blank')}
-                            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
-                        >
-                            <Download size={14} />
-                            Download CSV
-                        </button>
-                        <button 
-                            onClick={() => onFork(experiment.config)}
+                            onClick={() => onFork(config)}
                             className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                         >
                             <GitFork size={14} />
@@ -84,9 +87,9 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
                     </div>
                 </div>
                 <div className="space-y-1">
-                    <DetailItem label="Experiment ID" value={config.experiment_id} />
-                    <DetailItem label="Timestamp" value={new Date(config.timestamp).toLocaleString()} />
-                    <DetailItem label="Privacy (Epsilon)" value={config.epsilon} />
+                    <DetailItem label="Experiment ID" value={config?.experiment_id} />
+                    <DetailItem label="Timestamp" value={config?.timestamp ? new Date(config.timestamp).toLocaleString() : 'N/A'} />
+                    <DetailItem label="Privacy (Epsilon)" value={config?.epsilon} />
                 </div>
             </div>
 
@@ -119,7 +122,7 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
             </div>
             
             {/* Results Dashboard */}
-            {experiment.report && <ComparisonDashboard plots={experiment.plots} />}
+            {experiment.plots && <ComparisonDashboard plots={experiment.plots} />}
         </div>
     );
 };
