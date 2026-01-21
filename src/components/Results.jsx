@@ -192,30 +192,36 @@ const FairnessReport = ({ data }) => (
     </SafeComponent>
 );
 
-const Plots = ({ data }) => (
-    <SafeComponent data={data}>
-        <div className="space-y-8">
-            <SafeComponent data={data.correlations}>
-                <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Correlation Heatmaps</h3>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Real Data</h4><PlotlyFigure jsonFigure={data.correlations?.real} /></div>
-                        <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Synthetic Data</h4><PlotlyFigure jsonFigure={data.correlations?.synthetic} /></div>
+const Plots = ({ data }) => {
+    const correlations = data?.correlations;
+    const distributions = data?.distributions;
+    const distributionKeys = distributions ? Object.keys(distributions) : [];
+
+    return (
+        <SafeComponent data={data}>
+            <div className="space-y-8">
+                <SafeComponent data={correlations}>
+                    <div>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Correlation Heatmaps</h3>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Real Data</h4><PlotlyFigure jsonFigure={correlations?.real} /></div>
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg"><h4 className="text-sm font-medium text-center mb-2">Synthetic Data</h4><PlotlyFigure jsonFigure={correlations?.synthetic} /></div>
+                        </div>
                     </div>
-                </div>
-            </SafeComponent>
-            <SafeComponent data={data.distributions}>
-                <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Column Distributions</h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                         {Object.keys(data.distributions).map(col => (
-                            <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg"><PlotlyFigure jsonFigure={data.distributions[col]} /></div>
-                        ))}
+                </SafeComponent>
+                <SafeComponent data={distributions}>
+                    <div>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">Column Distributions</h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {distributionKeys.map(col => (
+                                <div key={col} className="bg-white p-4 border border-slate-200 rounded-lg"><PlotlyFigure jsonFigure={distributions[col]} /></div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            </SafeComponent>
-        </div>
-    </SafeComponent>
-);
+                </SafeComponent>
+            </div>
+        </SafeComponent>
+    );
+};
 
 export default Results;
