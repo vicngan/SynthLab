@@ -292,9 +292,9 @@ def get_experiment(experiment_id: str):
     exp_dir = Path("experiments") / experiment_id
     if not exp_dir.exists():
         raise HTTPException(status_code=404, detail="Experiment not found")
-    
+
     response = {}
-    
+
     # Load Report (contains config + stats)
     if (exp_dir / "report.json").exists():
         with open(exp_dir / "report.json", "r") as f:
@@ -303,12 +303,21 @@ def get_experiment(experiment_id: str):
         # Fallback if report isn't ready yet (pending/running)
         with open(exp_dir / "config.json", "r") as f:
             response = json.load(f)
-            
+
+    # Load synthetic data from CSV (limit to first 100 rows for performance)
+    csv_path = exp_dir / "synthetic_data.csv"
+    if csv_path.exists():
+        try:
+            df = pd.read_csv(csv_path)
+            response["synthetic_data"] = df.head(100).to_dict(orient='records')
+        except Exception:
+            response["synthetic_data"] = []
+
     # Load Notes
     if (exp_dir / "notes.md").exists():
         with open(exp_dir / "notes.md", "r") as f:
             response["notes"] = f.read()
-            
+
     return response
 
 @app.put("/api/experiments/{experiment_id}/notes")
