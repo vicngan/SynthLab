@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Loader2, AlertCircle, SlidersHorizontal, FileText, BookText, Edit, Save, GitFork, Download } from 'lucide-react';
+import { Loader2, AlertCircle, SlidersHorizontal, FileText, BookText, Edit, Save, GitFork, Download, FileSignature } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComparisonDashboard from './ComparisonDashboard';
@@ -69,13 +69,22 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
                     </h3>
                     <div className="flex gap-2">
                         {config?.status === 'completed' && (
-                            <button 
-                                onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/download`, '_blank')}
-                                className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
-                            >
-                                <Download size={14} />
-                                Download CSV
-                            </button>
+                            <>
+                                <button 
+                                    onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/certificate`, '_blank')}
+                                    className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
+                                >
+                                    <FileSignature size={14} />
+                                    Certificate
+                                </button>
+                                <button 
+                                    onClick={() => window.open(`http://127.0.0.1:8000/api/experiments/${experimentId}/download`, '_blank')}
+                                    className="flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-md bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm"
+                                >
+                                    <Download size={14} />
+                                    Download CSV
+                                </button>
+                            </>
                         )}
                         <button 
                             onClick={() => onFork(config)}

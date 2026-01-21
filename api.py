@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import List
 import uuid
+from fpdf import FPDF
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -235,6 +236,65 @@ def download_experiment_data(experiment_id: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Dataset not found")
     return FileResponse(file_path, media_type='text/csv', filename=f"synthetic_data_{experiment_id}.csv")
+
+@app.get("/api/experiments/{experiment_id}/certificate")
+def generate_certificate(experiment_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    
+    report_path = exp_dir / "report.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=400, detail="Experiment report not generated yet")
+        
+    with open(report_path, "r") as f:
+        report = json.load(f)
+        
+    # Create PDF
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "SynthLab Privacy & Compliance Audit", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Experiment Details
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, f"Experiment ID: {report.get('experiment_id', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Date: {report.get('timestamp', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Generator Method: {report.get('method', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Privacy Budget (Epsilon): {report.get('epsilon', 'N/A')}", ln=True)
+    pdf.ln(10)
+    
+    # Privacy Score (DCR)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "1. Privacy Validation (DCR Score)", ln=True)
+    pdf.set_font("Arial", "", 12)
+    
+    privacy = report.get("privacy_report", {})
+    dcr = privacy.get("dcr", {})
+    leaked_rows = privacy.get("leaked_rows", 0)
+    
+    status = "PASSED" if leaked_rows == 0 else "WARNING: LEAKAGE DETECTED"
+    
+    pdf.set_text_color(0, 128, 0) if leaked_rows == 0 else pdf.set_text_color(255, 0, 0)
+    pdf.cell(0, 10, f"Status: {status}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    
+    pdf.cell(0, 10, f"Exact Matches (Leakage): {leaked_rows}", ln=True)
+    pdf.cell(0, 10, f"Min Distance to Real Record: {dcr.get('min_distance', 'N/A')}", ln=True)
+    pdf.ln(10)
+    
+    # Signature
+    pdf.ln(20)
+    pdf.cell(0, 10, "_" * 50, ln=True)
+    pdf.cell(0, 10, "Principal Investigator Signature", ln=True)
+    
+    output_path = exp_dir / "compliance_certificate.pdf"
+    pdf.output(str(output_path))
+    
+    return FileResponse(output_path, media_type='application/pdf', filename=f"certificate_{experiment_id}.pdf")
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
