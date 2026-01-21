@@ -20,6 +20,7 @@ from src.modules.synthesizer import SyntheticGenerator
 from src.modules.stress_test import QualityReport
 from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
 from src.modules.clinical import ClinicalAnalyzer
+from src.modules.fhir_converter import FHIRConverter
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
@@ -295,6 +296,25 @@ def generate_certificate(experiment_id: str):
     pdf.output(str(output_path))
     
     return FileResponse(output_path, media_type='application/pdf', filename=f"certificate_{experiment_id}.pdf")
+
+@app.get("/api/experiments/{experiment_id}/download/fhir")
+def download_experiment_fhir(experiment_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    csv_path = exp_dir / "synthetic_data.csv"
+    
+    if not csv_path.exists():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+        
+    # Load data and convert
+    df = pd.read_csv(csv_path)
+    converter = FHIRConverter()
+    fhir_json = converter.convert_to_patient_bundle(df)
+    
+    output_path = exp_dir / "synthetic_data_fhir.json"
+    with open(output_path, "w") as f:
+        f.write(fhir_json)
+        
+    return FileResponse(output_path, media_type='application/json', filename=f"synthetic_data_fhir_{experiment_id}.json")
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
