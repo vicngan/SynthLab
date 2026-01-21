@@ -39,6 +39,7 @@ app.add_middleware(
 # --- In-Memory Storage for Literature Search ---
 # In a real-world app, you'd use a more robust solution like Redis or a database.
 literature_sessions = {}
+jobs = {}
 
 # --- Pydantic Models ---
 class NoteUpdate(BaseModel):
@@ -49,6 +50,9 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
     exp_dir = Path("experiments") / experiment_id
     config_path = exp_dir / "config.json"
     
+    # Update in-memory job status
+    jobs[experiment_id] = {"status": "running", "experiment_id": experiment_id}
+
     try:
         # Update status to running
         if config_path.exists():
@@ -97,8 +101,12 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         
         synthetic_data.to_csv(exp_dir / "synthetic_data.csv", index=False)
 
+        # Update in-memory job status to completed
+        jobs[experiment_id] = {"status": "completed", "experiment_id": experiment_id, "result": full_report}
+
     except Exception as e:
         print(f"Task failed: {e}")
+        jobs[experiment_id] = {"status": "failed", "error": str(e)}
         if config_path.exists():
             with open(config_path, "r") as f:
                 config = json.load(f)
@@ -149,10 +157,13 @@ async def synthesize_data(
         with open(exp_dir / "config.json", "w") as f:
             json.dump(config, f, indent=4)
 
+        # Initialize job status
+        jobs[experiment_id] = {"status": "pending", "experiment_id": experiment_id}
+
         # Offload heavy work to background task
         background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon)
 
-        return config
+        return {"job_id": experiment_id, "status": "pending"}
 
     except Exception as e:
         print(f"An error occurred during synthesis: {e}")
@@ -224,6 +235,10 @@ def download_experiment_data(experiment_id: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Dataset not found")
     return FileResponse(file_path, media_type='text/csv', filename=f"synthetic_data_{experiment_id}.csv")
+
+@app.get("/api/jobs/{job_id}")
+def get_job_status(job_id: str):
+    return jobs.get(job_id, {"status": "not_found"})
 
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):
