@@ -2,6 +2,9 @@ import pandas as pd
 import io
 import sys
 import json
+import threading
+import signal
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 import uuid
@@ -11,6 +14,11 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, Backgr
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+# --- Graceful Shutdown Support ---
+shutdown_event = threading.Event()
+active_tasks = set()
+active_tasks_lock = threading.Lock()
 
 # Add src directory to sys.path for module imports
 # sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -22,11 +30,41 @@ from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
 from src.modules.clinical import ClinicalAnalyzer
 from src.modules.fhir_converter import FHIRConverter
 
+# --- Lifespan Context Manager for Graceful Shutdown ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("SynthLab API starting up...")
+    yield
+    # Shutdown
+    print("Shutdown signal received. Waiting for background tasks to complete...")
+    shutdown_event.set()
+
+    # Wait for active tasks to complete (with timeout)
+    max_wait = 30  # seconds
+    waited = 0
+    while waited < max_wait:
+        with active_tasks_lock:
+            if not active_tasks:
+                break
+            remaining = len(active_tasks)
+        print(f"Waiting for {remaining} background task(s) to finish...")
+        import asyncio
+        await asyncio.sleep(1)
+        waited += 1
+
+    with active_tasks_lock:
+        if active_tasks:
+            print(f"Warning: {len(active_tasks)} task(s) did not complete within timeout")
+        else:
+            print("All background tasks completed. Shutting down cleanly.")
+
 # --- FastAPI App Initialization ---
 app = FastAPI(
     title="SynthLab API",
     description="API for generating privacy-safe synthetic data and performing literature analysis.",
-    version="0.2.0"
+    version="0.2.0",
+    lifespan=lifespan
 )
 
 # --- CORS Middleware ---
@@ -48,14 +86,26 @@ class NoteUpdate(BaseModel):
     notes: str
 
 # --- Background Task Logic ---
+def check_shutdown():
+    """Check if shutdown has been requested."""
+    return shutdown_event.is_set()
+
 def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float, sequence_key: str = None, sequence_index: str = None):
     exp_dir = Path("experiments") / experiment_id
     config_path = exp_dir / "config.json"
-    
+
+    # Register this task as active
+    with active_tasks_lock:
+        active_tasks.add(experiment_id)
+
     # Update in-memory job status
     jobs[experiment_id] = {"status": "running", "experiment_id": experiment_id}
 
     try:
+        # Check for shutdown before starting
+        if check_shutdown():
+            raise InterruptedError("Shutdown requested before task started")
+
         # Update status to running
         if config_path.exists():
             with open(config_path, "r") as f:
@@ -68,28 +118,45 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
 
+        # Check for shutdown after data loading
+        if check_shutdown():
+            raise InterruptedError("Shutdown requested during data loading")
+
         # --- Clinical Analysis ---
         clinical_analyzer = ClinicalAnalyzer()
         clinical_analysis = clinical_analyzer.analyze_columns(clean_df)
 
+        # Check for shutdown before training (most time-consuming step)
+        if check_shutdown():
+            raise InterruptedError("Shutdown requested before model training")
+
         # Pass epsilon to the generator
         generator = SyntheticGenerator(
-            method=method, 
+            method=method,
             epsilon=epsilon if epsilon > 0 else None,
             sequence_key=sequence_key,
             sequence_index=sequence_index
         )
         generator.train(clean_df)
+
+        # Check for shutdown after training
+        if check_shutdown():
+            raise InterruptedError("Shutdown requested after model training")
+
         synthetic_data = generator.generate(num_rows)
 
+        # Check for shutdown before report generation
+        if check_shutdown():
+            raise InterruptedError("Shutdown requested before report generation")
+
         quality_report = QualityReport(clean_df, synthetic_data)
-        
+
         # --- Reports ---
         stats = quality_report.compare_stats()
         privacy_check = quality_report.check_privacy()
         ks_results = quality_report.ks_test()
         dcr = quality_report.distance_to_closest_record()
-        
+
         fairness_results = None
         if sensitive_column and sensitive_column in synthetic_data.columns:
             if synthetic_data[sensitive_column].nunique() == 2:
@@ -105,11 +172,22 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         full_report = {**config, "status": "completed", "quality_report": {"column_stats": stats}, "privacy_report": {**privacy_check, "dcr": dcr}, "fairness_report": fairness_results, "plots": {"distributions": dist_plots_json, "correlations": corr_plots_json}, "clinical_report": clinical_analysis}
         with open(exp_dir / "report.json", "w") as f:
             json.dump(full_report, f, indent=4)
-        
+
         synthetic_data.to_csv(exp_dir / "synthetic_data.csv", index=False)
 
         # Update in-memory job status to completed
         jobs[experiment_id] = {"status": "completed", "experiment_id": experiment_id, "result": full_report}
+
+    except InterruptedError as e:
+        print(f"Task {experiment_id} interrupted: {e}")
+        jobs[experiment_id] = {"status": "cancelled", "error": str(e)}
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            config["status"] = "cancelled"
+            config["error"] = str(e)
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=4)
 
     except Exception as e:
         print(f"Task failed: {e}")
@@ -121,6 +199,11 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
             config["error"] = str(e)
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=4)
+
+    finally:
+        # Always unregister the task when done
+        with active_tasks_lock:
+            active_tasks.discard(experiment_id)
 
 # --- API Endpoints ---
 @app.get("/")

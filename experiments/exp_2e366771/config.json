@@ -1,0 +1,16 @@
+{
+    "experiment_id": "exp_2e366771",
+    "method": "CTGAN",
+    "timestamp": "2026-01-21T02:44:50.798227",
+    "num_rows": 1000,
+    "sensitive_column": null,
+    "epsilon": 1.2,
+    "sequence_key": null,
+    "sequence_index": null,
+    "status": "running",
+    "synthetic_data": [],
+    "plots": null,
+    "quality_report": {},
+    "privacy_report": {},
+    "clinical_report": {}
+}

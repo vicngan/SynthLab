@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import Plot from 'react-plotly.js';
 
 const SafeComponent = ({ children, data }) => {
-    if (data === undefined || data === null || (Array.isArray(data) && data.length === 0)) {
+    // Check for null, undefined, empty arrays, and empty objects
+    const isEmpty = data === undefined ||
+                   data === null ||
+                   (Array.isArray(data) && data.length === 0) ||
+                   (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0);
+
+    if (isEmpty) {
         return <div className="p-4 text-sm text-slate-500 bg-slate-50 rounded-md">Data not available for this report.</div>;
     }
     return <>{children}</>;
@@ -89,60 +95,69 @@ const DataTable = ({ data }) => (
     </SafeComponent>
 );
 
-const QualityReport = ({ data }) => (
-    <SafeComponent data={data?.column_stats}>
-        <div className="space-y-4">
-             <h3 className="text-lg font-semibold text-slate-800">Column Statistics Comparison</h3>
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 border border-slate-200 rounded-lg">
-                    <thead className="bg-slate-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Metric</th>
-                            {Object.keys(data.column_stats).map(col => <th key={col} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{col}</th>)}
-                        </tr>
-                    </thead>
-                     <tbody className="bg-white divide-y divide-slate-200">
-                        {['mean', 'std', 'min', '25%', '50%', '75%', 'max'].map(metric => (
-                            <tr key={metric}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{metric}</td>
-                                {Object.keys(data.column_stats).map(col => (
-                                    <td key={col} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{data.column_stats[col]?.[metric] ? data.column_stats[col][metric].toFixed(4) : 'N/A'}</td>
-                                ))}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </SafeComponent>
-);
+const QualityReport = ({ data }) => {
+    const columnStats = data?.column_stats;
+    const columns = columnStats ? Object.keys(columnStats) : [];
 
-const PrivacyReport = ({ data }) => (
-    <SafeComponent data={data}>
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-lg font-semibold text-slate-800">Leakage Detection</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                    <MetricCard label="Real Rows" value={data.total_real_rows} />
-                    <MetricCard label="Synthetic Rows" value={data.total_synthetic_rows} />
-                    <MetricCard label="Leaked Rows" value={data.leaked_rows} helpText={data.leaked_rows > 0 ? `Privacy Score: ${data.leaked_percentage?.toFixed(2)}%` : 'No exact matches found.'}/>
+    return (
+        <SafeComponent data={columnStats}>
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800">Column Statistics Comparison</h3>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 border border-slate-200 rounded-lg">
+                        <thead className="bg-slate-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Metric</th>
+                                {columns.map(col => <th key={col} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{col}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-slate-200">
+                            {['mean', 'std', 'min', '25%', '50%', '75%', 'max'].map(metric => (
+                                <tr key={metric}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{metric}</td>
+                                    {columns.map(col => (
+                                        <td key={col} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{columnStats[col]?.[metric] != null ? columnStats[col][metric].toFixed(4) : 'N/A'}</td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-             <SafeComponent data={data.dcr}>
+        </SafeComponent>
+    );
+};
+
+const PrivacyReport = ({ data }) => {
+    const dcr = data?.dcr;
+
+    return (
+        <SafeComponent data={data}>
+            <div className="space-y-6">
                 <div>
-                    <h3 className="text-lg font-semibold text-slate-800">Distance to Closest Record (DCR)</h3>
-                    <p className="text-sm text-slate-600">Measures re-identification risk. Higher distances are better.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-                        <MetricCard label="Min Distance" value={data.dcr.min_distance?.toFixed(4)} />
-                        <MetricCard label="Max Distance" value={data.dcr.max_distance?.toFixed(4)} />
-                        <MetricCard label="Avg Distance" value={data.dcr.mean_distance?.toFixed(4)} />
-                        <MetricCard label="Records Too Close" value={data.dcr.too_close_percentage?.toFixed(2)} unit="%" helpText={`${data.dcr.close_records} records are highly similar.`} />
+                    <h3 className="text-lg font-semibold text-slate-800">Leakage Detection</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                        <MetricCard label="Real Rows" value={data?.total_real_rows} />
+                        <MetricCard label="Synthetic Rows" value={data?.total_synthetic_rows} />
+                        <MetricCard label="Leaked Rows" value={data?.leaked_rows} helpText={data?.leaked_rows > 0 ? `Privacy Score: ${data?.leaked_percentage?.toFixed(2)}%` : 'No exact matches found.'}/>
                     </div>
                 </div>
-            </SafeComponent>
-        </div>
-    </SafeComponent>
-);
+                <SafeComponent data={dcr}>
+                    <div>
+                        <h3 className="text-lg font-semibold text-slate-800">Distance to Closest Record (DCR)</h3>
+                        <p className="text-sm text-slate-600">Measures re-identification risk. Higher distances are better.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+                            <MetricCard label="Min Distance" value={dcr?.min_distance?.toFixed(4)} />
+                            <MetricCard label="Max Distance" value={dcr?.max_distance?.toFixed(4)} />
+                            <MetricCard label="Avg Distance" value={dcr?.mean_distance?.toFixed(4)} />
+                            <MetricCard label="Records Too Close" value={dcr?.too_close_percentage?.toFixed(2)} unit="%" helpText={dcr?.close_records != null ? `${dcr.close_records} records are highly similar.` : ''} />
+                        </div>
+                    </div>
+                </SafeComponent>
+            </div>
+        </SafeComponent>
+    );
+};
 
 const FairnessReport = ({ data }) => (
     <SafeComponent data={data}>

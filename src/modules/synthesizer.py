@@ -3,6 +3,7 @@ import warnings
 from sdv.single_table import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer
 from sdv.sequential import PARSynthesizer
 from sdv.metadata import SingleTableMetadata
+from sklearn.exceptions import ConvergenceWarning
 
 class SyntheticGenerator: #generate synthetic data using SDv library
 
@@ -40,8 +41,10 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         warnings.filterwarnings("ignore", category=FutureWarning, module="sdv")
         warnings.filterwarnings("ignore", category=FutureWarning, module="ctgan")
         warnings.filterwarnings("ignore", category=UserWarning, module="sdv")
-        # Suppress joblib resource tracker warnings
-        warnings.filterwarnings("ignore", message=".*resource_tracker.*")
+        # Suppress multiprocessing resource tracker warnings about leaked semaphores
+        warnings.filterwarnings("ignore", message=".*leaked semaphore objects.*", category=UserWarning, module="multiprocessing.resource_tracker")
+        # Suppress GMM convergence warnings from sklearn, common in CTGAN
+        warnings.filterwarnings("ignore", category=ConvergenceWarning, module="sklearn.mixture._base")
 
         if method not in self.SYNTHESIZERS:
             raise ValueError(f"Invalid method: {method}. Choose from {list(self.SYNTHESIZERS.keys())}.")
@@ -162,8 +165,7 @@ class SyntheticGenerator: #generate synthetic data using SDv library
             None
         """
         if column not in self.MEDICAL_CONSTRAINTS:
-            self.MEDICAL_CONSTRAINTS[column] = {} # Initialize the column in the medical constraints dictionary if it doesn't exist
-            raise ValueError(f"Invalid column: {column}. Choose from {list(self.MEDICAL_CONSTRAINTS.keys())}.") # Ensure the column exists in the medical constraints dictionary
+            self.MEDICAL_CONSTRAINTS[column] = {} # Initialize if it's a new constraint
         
         if min_val is not None:
             self.MEDICAL_CONSTRAINTS[column]['min'] = min_val # Update the minimum value for the column
@@ -172,4 +174,4 @@ class SyntheticGenerator: #generate synthetic data using SDv library
         if dtype is not None:
             self.MEDICAL_CONSTRAINTS[column]['type'] = dtype # Update the data type for the column
 
-        print(f"Added custom constraints for column {column}: {self.MEDICAL_CONSTRAINTS[column]}") # Print confirmation message
+        print(f"Added/Updated custom constraints for column {column}: {self.MEDICAL_CONSTRAINTS[column]}") # Print confirmation message
