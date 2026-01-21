@@ -27,7 +27,8 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **Responsive Design**: A clean, modern interface built with TailwindCSS that works on various screen sizes.
 
 ### Synthetic Data Engine
-- **Multiple Synthesis Methods**: Choose between `CTGAN`, `GaussianCopula`, and `TVAE` synthesizers from the SDV library.
+- **Multiple Synthesis Methods**: Choose between `CTGAN`, `GaussianCopula`, `TVAE`, and `PAR` (Probabilistic AutoRegressive) synthesizers from the SDV library.
+- **Longitudinal Data Support**: Use the PAR model to synthesize sequential patient data (e.g., multiple visits per patient) while preserving temporal dependencies.
 - **Medical Constraints**: Automatic bounds enforcement for common clinical columns (e.g., Age 0-120, Glucose 0-600).
 
 ### Quality & Validation
@@ -44,6 +45,8 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Export & API
 - **REST API**: Programmatic access to the synthesis engine via FastAPI.
 - **JSON Response**: Get synthetic data and all quality/privacy reports in a single structured format.
+- **One-Click Compliance Certificate**: Generate a professional PDF report certifying privacy safety (DCR score) and statistical fidelity for IRB submissions.
+- **FHIR Interoperability**: Export synthetic patient cohorts directly to HL7 FHIR R4 JSON format for integration with healthcare systems (Epic/Cerner sandboxes).
 
 ### Clinical & BME Specifics
 - **Smart Type Detection**: Automatically identifies clinical columns (e.g., HbA1c, Glucose) and suggests appropriate physiological bounds and distributions.
