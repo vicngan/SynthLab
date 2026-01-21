@@ -70,11 +70,16 @@ const App = () => {
         }
     }, [synthFile]);
 
+    // State for synthesis progress
+    const [synthProgress, setSynthProgress] = useState(null);
+
     const handleSynthSubmit = async () => {
         if (!synthFile) { setSynthError('Please select a file first.'); return; }
         setSynthLoading(true);
         setSynthError(null);
         setSynthResults(null);
+        setSynthProgress({ status: 'pending', message: 'Submitting job...' });
+
         const formData = new FormData();
         formData.append('file', synthFile);
         formData.append('method', synthSettings.method);
@@ -86,10 +91,38 @@ const App = () => {
         }
         try {
             const response = await axios.post('http://127.0.0.1:8000/api/synthesize', formData);
-            setSynthResults(response.data);
+            const jobId = response.data.job_id;
+            setSynthProgress({ status: 'running', message: 'Training model... This may take a few minutes.' });
+
+            // Poll for job completion
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusResponse = await axios.get(`http://127.0.0.1:8000/api/jobs/${jobId}`);
+                    const jobStatus = statusResponse.data.status;
+
+                    if (jobStatus === 'completed') {
+                        clearInterval(pollInterval);
+                        // Fetch full experiment results
+                        const resultsResponse = await axios.get(`http://127.0.0.1:8000/api/experiments/${jobId}`);
+                        setSynthResults(resultsResponse.data);
+                        setSynthProgress(null);
+                        setSynthLoading(false);
+                    } else if (jobStatus === 'failed' || jobStatus === 'cancelled') {
+                        clearInterval(pollInterval);
+                        setSynthError(statusResponse.data.error || `Job ${jobStatus}`);
+                        setSynthProgress(null);
+                        setSynthLoading(false);
+                    } else if (jobStatus === 'running') {
+                        setSynthProgress({ status: 'running', message: 'Training model... This may take a few minutes.' });
+                    }
+                } catch (pollErr) {
+                    console.error('Polling error:', pollErr);
+                }
+            }, 2000); // Poll every 2 seconds
+
         } catch (err) {
             setSynthError(err.response?.data?.detail || 'An unknown error occurred.');
-        } finally {
+            setSynthProgress(null);
             setSynthLoading(false);
         }
     };
@@ -156,8 +189,21 @@ const App = () => {
                  <button onClick={handleSynthSubmit} disabled={!synthFile || synthLoading} className="w-full px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                     {synthLoading ? <><ClipLoader color="#ffffff" size={20}/> Generating...</> : "Initialize Generation"}
                  </button>
+                 {synthProgress && (
+                    <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <Loader2 className="animate-spin text-violet-600" size={20} />
+                            <div>
+                                <p className="text-sm font-medium text-violet-800">
+                                    {synthProgress.status === 'pending' ? 'Submitting...' : 'Processing'}
+                                </p>
+                                <p className="text-xs text-violet-600">{synthProgress.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                 )}
             </div>
-            
+
             {(synthError || synthResults) && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 min-h-[300px]">
                     <h2 className="text-xl font-semibold text-slate-800 mb-4">3. Results</h2>
