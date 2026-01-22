@@ -85,6 +85,29 @@ jobs = {}
 class NoteUpdate(BaseModel):
     notes: str
 
+class GraphAnnotation(BaseModel):
+    id: str = None
+    graphId: str
+    x: float
+    y: float
+    comment: str
+    author: str = "Anonymous"
+    timestamp: str = None
+    resolved: bool = False
+
+class LiteratureAnnotation(BaseModel):
+    id: str = None
+    query_id: str
+    result_index: int
+    start: int
+    end: int
+    comment: str
+    color: str = "yellow"
+    timestamp: str = None
+
+class SaveSessionRequest(BaseModel):
+    name: str
+
 # --- Background Task Logic ---
 def check_shutdown():
     """Check if shutdown has been requested."""
@@ -421,6 +444,86 @@ def download_experiment_fhir(experiment_id: str):
 def get_job_status(job_id: str):
     return jobs.get(job_id, {"status": "not_found"})
 
+# --- Graph Annotation Endpoints ---
+@app.get("/api/experiments/{experiment_id}/annotations")
+def get_annotations(experiment_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    annotations_path = exp_dir / "annotations.json"
+    if not annotations_path.exists():
+        return {"graph_annotations": []}
+
+    with open(annotations_path, "r") as f:
+        return json.load(f)
+
+@app.post("/api/experiments/{experiment_id}/annotations")
+def add_annotation(experiment_id: str, annotation: GraphAnnotation):
+    exp_dir = Path("experiments") / experiment_id
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    annotations_path = exp_dir / "annotations.json"
+    data = {"graph_annotations": []}
+    if annotations_path.exists():
+        with open(annotations_path, "r") as f:
+            data = json.load(f)
+
+    # Generate ID and timestamp
+    annotation.id = str(uuid.uuid4())
+    annotation.timestamp = pd.Timestamp.now().isoformat()
+    data["graph_annotations"].append(annotation.dict())
+
+    with open(annotations_path, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return annotation
+
+@app.put("/api/experiments/{experiment_id}/annotations/{annotation_id}")
+def update_annotation(experiment_id: str, annotation_id: str, annotation: GraphAnnotation):
+    exp_dir = Path("experiments") / experiment_id
+    annotations_path = exp_dir / "annotations.json"
+
+    if not annotations_path.exists():
+        raise HTTPException(status_code=404, detail="Annotations not found")
+
+    with open(annotations_path, "r") as f:
+        data = json.load(f)
+
+    for i, ann in enumerate(data["graph_annotations"]):
+        if ann["id"] == annotation_id:
+            annotation.id = annotation_id
+            annotation.timestamp = pd.Timestamp.now().isoformat()
+            data["graph_annotations"][i] = annotation.dict()
+            with open(annotations_path, "w") as f:
+                json.dump(data, f, indent=4)
+            return annotation
+
+    raise HTTPException(status_code=404, detail="Annotation not found")
+
+@app.delete("/api/experiments/{experiment_id}/annotations/{annotation_id}")
+def delete_annotation(experiment_id: str, annotation_id: str):
+    exp_dir = Path("experiments") / experiment_id
+    annotations_path = exp_dir / "annotations.json"
+
+    if not annotations_path.exists():
+        raise HTTPException(status_code=404, detail="Annotations not found")
+
+    with open(annotations_path, "r") as f:
+        data = json.load(f)
+
+    original_len = len(data["graph_annotations"])
+    data["graph_annotations"] = [a for a in data["graph_annotations"] if a["id"] != annotation_id]
+
+    if len(data["graph_annotations"]) == original_len:
+        raise HTTPException(status_code=404, detail="Annotation not found")
+
+    with open(annotations_path, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return {"status": "deleted"}
+
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):
     if not LITERATURE_AVAILABLE:
@@ -450,7 +553,7 @@ async def search_literature(session_id: str = Form(...), query: str = Form(...))
         raise HTTPException(status_code=404, detail="Invalid or expired session ID.")
 
     literature_search = literature_sessions[session_id]
-    
+
     try:
         results = literature_search.search(query, top_k=5)
         summary = "Could not generate summary."
@@ -461,6 +564,201 @@ async def search_literature(session_id: str = Form(...), query: str = Form(...))
     except Exception as e:
         print(f"An error occurred during literature search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Literature Session Persistence Endpoints ---
+@app.get("/api/literature/sessions")
+def list_literature_sessions():
+    """List all saved literature sessions."""
+    lit_dir = Path("literature")
+    if not lit_dir.exists():
+        return []
+
+    sessions = []
+    for session_dir in lit_dir.iterdir():
+        if session_dir.is_dir():
+            session_file = session_dir / "session.json"
+            if session_file.exists():
+                try:
+                    with open(session_file, "r") as f:
+                        sessions.append(json.load(f))
+                except Exception:
+                    continue
+
+    return sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)
+
+@app.post("/api/literature/sessions/{session_id}/save")
+def save_literature_session(session_id: str, request: SaveSessionRequest):
+    """Save a literature session to disk for persistence."""
+    if session_id not in literature_sessions:
+        raise HTTPException(status_code=404, detail="Session not found in memory. Upload PDFs first.")
+
+    lit_dir = Path("literature") / session_id
+    lit_dir.mkdir(parents=True, exist_ok=True)
+
+    lit_search = literature_sessions[session_id]
+    stats = lit_search.get_stats()
+
+    # Save session metadata
+    session_data = {
+        "session_id": session_id,
+        "name": request.name,
+        "created_at": pd.Timestamp.now().isoformat(),
+        "updated_at": pd.Timestamp.now().isoformat(),
+        "files": stats.get("files", []),
+        "stats": stats
+    }
+
+    with open(lit_dir / "session.json", "w") as f:
+        json.dump(session_data, f, indent=4)
+
+    # Initialize empty queries file
+    if not (lit_dir / "queries.json").exists():
+        with open(lit_dir / "queries.json", "w") as f:
+            json.dump({"queries": []}, f, indent=4)
+
+    # Save FAISS index and documents
+    try:
+        lit_search.save_index(str(lit_dir))
+    except Exception as e:
+        print(f"Warning: Could not save FAISS index: {e}")
+
+    return session_data
+
+@app.get("/api/literature/sessions/{session_id}/load")
+def load_literature_session(session_id: str):
+    """Load a saved literature session back into memory."""
+    lit_dir = Path("literature") / session_id
+    if not lit_dir.exists():
+        raise HTTPException(status_code=404, detail="Saved session not found")
+
+    session_file = lit_dir / "session.json"
+    if not session_file.exists():
+        raise HTTPException(status_code=404, detail="Session metadata not found")
+
+    # Load session metadata
+    with open(session_file, "r") as f:
+        session_data = json.load(f)
+
+    # Create new LiteratureSearch and load index
+    lit_search = LiteratureSearch()
+    try:
+        lit_search.load_index(str(lit_dir))
+        literature_sessions[session_id] = lit_search
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load session index: {e}")
+
+    return {"session_id": session_id, "session": session_data, "stats": lit_search.get_stats()}
+
+@app.delete("/api/literature/sessions/{session_id}")
+def delete_literature_session(session_id: str):
+    """Delete a saved literature session."""
+    lit_dir = Path("literature") / session_id
+    if not lit_dir.exists():
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    import shutil
+    shutil.rmtree(lit_dir)
+
+    # Also remove from memory if present
+    if session_id in literature_sessions:
+        del literature_sessions[session_id]
+
+    return {"status": "deleted"}
+
+@app.get("/api/literature/sessions/{session_id}/queries")
+def get_literature_queries(session_id: str):
+    """Get query history for a literature session."""
+    lit_dir = Path("literature") / session_id
+    queries_file = lit_dir / "queries.json"
+
+    if not queries_file.exists():
+        return {"queries": []}
+
+    with open(queries_file, "r") as f:
+        return json.load(f)
+
+@app.post("/api/literature/sessions/{session_id}/queries")
+def save_literature_query(session_id: str, query: str = Form(...), results: str = Form(...), summary: str = Form(...)):
+    """Save a query and its results to the session history."""
+    lit_dir = Path("literature") / session_id
+    lit_dir.mkdir(parents=True, exist_ok=True)
+
+    queries_file = lit_dir / "queries.json"
+    data = {"queries": []}
+    if queries_file.exists():
+        with open(queries_file, "r") as f:
+            data = json.load(f)
+
+    query_entry = {
+        "id": str(uuid.uuid4()),
+        "query": query,
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "results": json.loads(results) if results else [],
+        "summary": summary
+    }
+    data["queries"].append(query_entry)
+
+    with open(queries_file, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return query_entry
+
+# --- Literature Annotation Endpoints ---
+@app.get("/api/literature/sessions/{session_id}/annotations")
+def get_literature_annotations(session_id: str):
+    """Get all annotations for a literature session."""
+    lit_dir = Path("literature") / session_id
+    annotations_file = lit_dir / "annotations.json"
+
+    if not annotations_file.exists():
+        return {"highlights": []}
+
+    with open(annotations_file, "r") as f:
+        return json.load(f)
+
+@app.post("/api/literature/sessions/{session_id}/annotations")
+def add_literature_annotation(session_id: str, annotation: LiteratureAnnotation):
+    """Add a highlight/annotation to literature results."""
+    lit_dir = Path("literature") / session_id
+    lit_dir.mkdir(parents=True, exist_ok=True)
+
+    annotations_file = lit_dir / "annotations.json"
+    data = {"highlights": []}
+    if annotations_file.exists():
+        with open(annotations_file, "r") as f:
+            data = json.load(f)
+
+    annotation.id = str(uuid.uuid4())
+    annotation.timestamp = pd.Timestamp.now().isoformat()
+    data["highlights"].append(annotation.dict())
+
+    with open(annotations_file, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return annotation
+
+@app.delete("/api/literature/sessions/{session_id}/annotations/{annotation_id}")
+def delete_literature_annotation(session_id: str, annotation_id: str):
+    """Delete a literature annotation."""
+    lit_dir = Path("literature") / session_id
+    annotations_file = lit_dir / "annotations.json"
+
+    if not annotations_file.exists():
+        raise HTTPException(status_code=404, detail="Annotations not found")
+
+    with open(annotations_file, "r") as f:
+        data = json.load(f)
+
+    original_len = len(data["highlights"])
+    data["highlights"] = [a for a in data["highlights"] if a["id"] != annotation_id]
+
+    if len(data["highlights"]) == original_len:
+        raise HTTPException(status_code=404, detail="Annotation not found")
+
+    with open(annotations_file, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return {"status": "deleted"}
 
 # To run this API:
 # uvicorn api:app --reload

@@ -138,7 +138,7 @@ const ExperimentDetail = ({ experimentId, onFork }) => {
             </div>
             
             {/* Results Dashboard */}
-            {experiment.plots && <ComparisonDashboard plots={experiment.plots} />}
+            {experiment.plots && <ComparisonDashboard plots={experiment.plots} experimentId={experimentId} />}
         </div>
     );
 };

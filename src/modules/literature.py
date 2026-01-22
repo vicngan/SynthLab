@@ -234,3 +234,61 @@ Provide a concise, accurate summary that directly addresses the question. Cite w
         )
     
         return message.content[0].text
+
+    def save_index(self, path: str) -> None:
+        """
+        Save FAISS index and document metadata to disk for persistence.
+
+        Args:
+            path: Directory path to save index files
+        """
+        import pickle
+        from pathlib import Path
+
+        save_dir = Path(path)
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save FAISS index
+        if self.index is not None:
+            faiss.write_index(self.index, str(save_dir / "index.faiss"))
+
+        # Save document metadata and embeddings
+        data = {
+            'documents': self.documents,
+            'embeddings': self.embeddings
+        }
+        with open(save_dir / "documents.pkl", "wb") as f:
+            pickle.dump(data, f)
+
+        print(f"Index saved to {save_dir}")
+
+    def load_index(self, path: str) -> None:
+        """
+        Load FAISS index and document metadata from disk.
+
+        Args:
+            path: Directory path containing saved index files
+        """
+        import pickle
+        from pathlib import Path
+
+        load_dir = Path(path)
+
+        # Load FAISS index
+        index_path = load_dir / "index.faiss"
+        if index_path.exists():
+            self.index = faiss.read_index(str(index_path))
+        else:
+            raise FileNotFoundError(f"FAISS index not found at {index_path}")
+
+        # Load document metadata and embeddings
+        docs_path = load_dir / "documents.pkl"
+        if docs_path.exists():
+            with open(docs_path, "rb") as f:
+                data = pickle.load(f)
+                self.documents = data.get('documents', [])
+                self.embeddings = data.get('embeddings')
+        else:
+            raise FileNotFoundError(f"Documents file not found at {docs_path}")
+
+        print(f"Index loaded from {load_dir}: {len(self.documents)} documents")

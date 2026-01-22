@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown, History } from 'lucide-react';
+import { Search, User, ChevronLeft, ChevronRight, Beaker, BookOpen, Settings, UploadCloud, FileText, Loader2, Sparkles, AlertCircle, ChevronDown, History, Save } from 'lucide-react';
 import ClipLoader from "react-spinners/ClipLoader";
 import Results from './components/Results';
 import ExperimentHistory from './components/ExperimentHistory';
+import LiteratureHistory from './components/LiteratureHistory';
 
 const TabButton = ({ active, onClick, icon, label }) => (
   <button 
@@ -49,8 +50,11 @@ const App = () => {
     const [litStats, setLitStats] = useState(null);
     const [litQuery, setLitQuery] = useState('');
     const [litResults, setLitResults] = useState(null);
-    const [litLoading, setLitLoading] = useState({ indexing: false, searching: false });
+    const [litLoading, setLitLoading] = useState({ indexing: false, searching: false, saving: false });
     const [litError, setLitError] = useState(null);
+    const [litSubTab, setLitSubTab] = useState('search'); // 'search' or 'history'
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [saveSessionName, setSaveSessionName] = useState('');
     
     const theme = { bg: "bg-slate-50", surface: "bg-white", border: "border-slate-200" };
     const synthesizerOptions = ['CTGAN', 'GaussianCopula', 'TVAE'];
@@ -163,6 +167,31 @@ const App = () => {
         }
     };
 
+    const handleSaveSession = async () => {
+        if (!saveSessionName.trim()) return;
+        setLitLoading({ ...litLoading, saving: true });
+        try {
+            await axios.post(`http://127.0.0.1:8000/api/literature/sessions/${litSessionId}/save`, {
+                name: saveSessionName.trim()
+            });
+            setShowSaveModal(false);
+            setSaveSessionName('');
+            alert('Session saved successfully!');
+        } catch (err) {
+            alert('Failed to save session: ' + (err.response?.data?.detail || err.message));
+        } finally {
+            setLitLoading({ ...litLoading, saving: false });
+        }
+    };
+
+    const handleLoadLiteratureSession = (sessionData) => {
+        setLitSessionId(sessionData.session_id);
+        setLitStats(sessionData.stats);
+        setLitSubTab('search');
+        setLitResults(null);
+        setLitQuery('');
+    };
+
     const renderGeneratorContent = () => (
         <div className="space-y-8">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
@@ -216,55 +245,131 @@ const App = () => {
     );
 
     const renderLiteratureContent = () => (
-         <div className="space-y-8">
-             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4">1. Upload & Index PDFs</h2>
-                 <div className="flex justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 text-center">
-                    <div>
-                         <UploadCloud className="mx-auto h-12 w-12 text-slate-400" />
-                        <label htmlFor="lit-upload" className="mt-4 text-sm font-semibold text-violet-600 cursor-pointer hover:text-violet-500">Upload PDF files</label>
-                        <input id="lit-upload" type="file" className="sr-only" onChange={(e) => setLitFiles(Array.from(e.target.files))} accept=".pdf" multiple/>
-                    </div>
-                </div>
-                {litFiles.length > 0 && <ul className="mt-4 list-disc list-inside text-sm text-slate-600">{litFiles.map(f => <li key={f.name}>{f.name}</li>)}</ul>}
-                <button onClick={handleLitIndex} disabled={litFiles.length === 0 || litLoading.indexing} className="mt-6 w-full px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                    {litLoading.indexing ? <><Loader2 className="animate-spin"/> Indexing...</> : "Index Files"}
-                </button>
-             </div>
-             
-             <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-8 ${!litSessionId ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                 <h2 className="text-xl font-semibold text-slate-800 mb-4">2. Search Literature</h2>
-                 {litStats && <p className="text-sm text-slate-600 mb-4">Indexed {litStats.num_pages} pages from {litStats.num_documents} documents.</p>}
-                 <div className="relative">
-                    <input type="text" value={litQuery} onChange={(e) => setLitQuery(e.target.value)} placeholder="e.g., privacy in synthetic data" disabled={!litSessionId || litLoading.searching} className="w-full pl-4 pr-10 py-3 bg-slate-100 border-none rounded-md text-sm focus:ring-2 focus:ring-violet-500 outline-none"/>
-                    <Search className="absolute right-4 top-3.5 h-5 w-5 text-slate-400" />
+         <div className="space-y-6">
+             {/* Sub-tabs for Literature */}
+             <div className="flex items-center justify-between">
+                 <div className="flex gap-2">
+                     <button
+                         onClick={() => setLitSubTab('search')}
+                         className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                             litSubTab === 'search'
+                                 ? 'bg-violet-100 text-violet-700 border border-violet-200'
+                                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                         }`}
+                     >
+                         <Search size={14} className="inline mr-2" />
+                         Search
+                     </button>
+                     <button
+                         onClick={() => setLitSubTab('history')}
+                         className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                             litSubTab === 'history'
+                                 ? 'bg-violet-100 text-violet-700 border border-violet-200'
+                                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                         }`}
+                     >
+                         <History size={14} className="inline mr-2" />
+                         History
+                     </button>
                  </div>
-                 <button onClick={handleLitSearch} disabled={!litSessionId || !litQuery || litLoading.searching} className="mt-6 w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                    {litLoading.searching ? <><Loader2 className="animate-spin"/> Searching...</> : "Search"}
-                 </button>
+                 {litSessionId && litSubTab === 'search' && (
+                     <button
+                         onClick={() => setShowSaveModal(true)}
+                         className="px-4 py-2 text-sm font-medium bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-2"
+                     >
+                         <Save size={14} />
+                         Save Session
+                     </button>
+                 )}
              </div>
-             
-             {(litError || litResults) && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 min-h-[300px]">
-                    <h2 className="text-xl font-semibold text-slate-800 mb-4">3. Search Results</h2>
-                    {litError && <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center"><AlertCircle className="w-5 h-5 mr-3"/>{litError}</div>}
-                    {litResults && (
-                        <div className="space-y-6">
+
+             {litSubTab === 'search' ? (
+                 <div className="space-y-8">
+                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                        <h2 className="text-xl font-semibold text-slate-800 mb-4">1. Upload & Index PDFs</h2>
+                         <div className="flex justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 text-center">
                             <div>
-                                <h3 className="font-semibold flex items-center gap-2"><Sparkles className="text-violet-500"/>AI Summary</h3>
-                                <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-4 rounded-md border">{litResults.summary}</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold">Sources</h3>
-                                <div className="space-y-2 mt-2">
-                                    {litResults.results?.map((res, i) => (
-                                        <details key={i} className="bg-slate-50 p-3 rounded-md border text-sm"><summary className="font-medium cursor-pointer">Score: {res.score.toFixed(3)} - {res.filename}</summary><p className="mt-2 pt-2 border-t">{res.text}</p></details>
-                                    ))}
-                                </div>
+                                 <UploadCloud className="mx-auto h-12 w-12 text-slate-400" />
+                                <label htmlFor="lit-upload" className="mt-4 text-sm font-semibold text-violet-600 cursor-pointer hover:text-violet-500">Upload PDF files</label>
+                                <input id="lit-upload" type="file" className="sr-only" onChange={(e) => setLitFiles(Array.from(e.target.files))} accept=".pdf" multiple/>
                             </div>
                         </div>
-                    )}
-                </div>
+                        {litFiles.length > 0 && <ul className="mt-4 list-disc list-inside text-sm text-slate-600">{litFiles.map(f => <li key={f.name}>{f.name}</li>)}</ul>}
+                        <button onClick={handleLitIndex} disabled={litFiles.length === 0 || litLoading.indexing} className="mt-6 w-full px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            {litLoading.indexing ? <><Loader2 className="animate-spin"/> Indexing...</> : "Index Files"}
+                        </button>
+                     </div>
+
+                     <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-8 ${!litSessionId ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                         <h2 className="text-xl font-semibold text-slate-800 mb-4">2. Search Literature</h2>
+                         {litStats && <p className="text-sm text-slate-600 mb-4">Indexed {litStats.num_pages} pages from {litStats.num_documents} documents.</p>}
+                         <div className="relative">
+                            <input type="text" value={litQuery} onChange={(e) => setLitQuery(e.target.value)} placeholder="e.g., privacy in synthetic data" disabled={!litSessionId || litLoading.searching} className="w-full pl-4 pr-10 py-3 bg-slate-100 border-none rounded-md text-sm focus:ring-2 focus:ring-violet-500 outline-none"/>
+                            <Search className="absolute right-4 top-3.5 h-5 w-5 text-slate-400" />
+                         </div>
+                         <button onClick={handleLitSearch} disabled={!litSessionId || !litQuery || litLoading.searching} className="mt-6 w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            {litLoading.searching ? <><Loader2 className="animate-spin"/> Searching...</> : "Search"}
+                         </button>
+                     </div>
+
+                     {(litError || litResults) && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 min-h-[300px]">
+                            <h2 className="text-xl font-semibold text-slate-800 mb-4">3. Search Results</h2>
+                            {litError && <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center"><AlertCircle className="w-5 h-5 mr-3"/>{litError}</div>}
+                            {litResults && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h3 className="font-semibold flex items-center gap-2"><Sparkles className="text-violet-500"/>AI Summary</h3>
+                                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-4 rounded-md border">{litResults.summary}</p>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold">Sources</h3>
+                                        <div className="space-y-2 mt-2">
+                                            {litResults.results?.map((res, i) => (
+                                                <details key={i} className="bg-slate-50 p-3 rounded-md border text-sm"><summary className="font-medium cursor-pointer">Score: {res.score.toFixed(3)} - {res.filename}</summary><p className="mt-2 pt-2 border-t">{res.text}</p></details>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                     )}
+                 </div>
+             ) : (
+                 <LiteratureHistory onLoadSession={handleLoadLiteratureSession} />
+             )}
+
+             {/* Save Session Modal */}
+             {showSaveModal && (
+                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSaveModal(false)}>
+                     <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                         <h3 className="text-lg font-semibold text-slate-800 mb-4">Save Literature Session</h3>
+                         <p className="text-sm text-slate-600 mb-4">Give your session a name to save it for later use.</p>
+                         <input
+                             type="text"
+                             value={saveSessionName}
+                             onChange={(e) => setSaveSessionName(e.target.value)}
+                             placeholder="e.g., Privacy Research Papers"
+                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+                             autoFocus
+                         />
+                         <div className="flex justify-end gap-3 mt-6">
+                             <button
+                                 onClick={() => setShowSaveModal(false)}
+                                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
+                             >
+                                 Cancel
+                             </button>
+                             <button
+                                 onClick={handleSaveSession}
+                                 disabled={!saveSessionName.trim() || litLoading.saving}
+                                 className="px-4 py-2 text-sm bg-teal-500 text-white rounded-lg hover:bg-teal-600 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2"
+                             >
+                                 {litLoading.saving ? <><Loader2 className="animate-spin" size={14}/> Saving...</> : 'Save Session'}
+                             </button>
+                         </div>
+                     </div>
+                 </div>
              )}
          </div>
     );
