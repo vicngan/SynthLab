@@ -185,110 +185,57 @@ class LiteratureSearch:
             'files': files
         }
     
-    def summarize_results(self, query: str, results: List[Dict], max_tokens: int = 500) -> str:
+    def save_index_to_s3(self, s3_handler, s3_prefix: str) -> None:
         """
-        Use Claude to summarize search results and answer the query.
-        
-        Args:
-            query: User's question
-            results: Search results from self.search()
-            max_tokens: Max length of summary
-            
-        Returns:
-            AI-generated summary
-        """
-
-        import os
-
-        try:
-            import anthropic
-        except ImportError:
-            return "Install anthropic: pip install anthropic"
-        
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            return "ANTHROPIC_API_KEY not set. Add it to your .env file."
-        
-        #combine top results into context
-        context = "\n\n --- \n\n".join([
-            f"Source: {r['filename']}\n{r['text'][:1500]}"
-            for r in results [:3]
-        ])
-
-        client = anthropic.Anthropic(api_key=api_key)
-
-        message = client.messages.create(
-            model = "claude-sonnet-4-20250514",
-            max_tokens=max_tokens,
-            messages = [
-                {
-                    "role": "user",
-                    "content": f"""Based on the following research excerpts, answer this question: {query}
-Research context:
-{context}
-
-Provide a concise, accurate summary that directly addresses the question. Cite which source supports each point."""
-
-                }
-            ]
-        )
-    
-        return message.content[0].text
-
-    def save_index(self, path: str) -> None:
-        """
-        Save FAISS index and document metadata to disk for persistence.
+        Save FAISS index and document metadata to an S3 bucket.
 
         Args:
-            path: Directory path to save index files
+            s3_handler: An instance of the S3Handler class.
+            s3_prefix: The key prefix (folder) in S3 to save to.
         """
         import pickle
-        from pathlib import Path
-
-        save_dir = Path(path)
-        save_dir.mkdir(parents=True, exist_ok=True)
+        import io
 
         # Save FAISS index
         if self.index is not None:
-            faiss.write_index(self.index, str(save_dir / "index.faiss"))
+            # Serialize index to bytes
+            index_bytes = faiss.serialize_index(self.index)
+            s3_handler.write_file_content(f"{s3_prefix}/index.faiss", index_bytes, 'application/octet-stream')
 
         # Save document metadata and embeddings
         data = {
             'documents': self.documents,
             'embeddings': self.embeddings
         }
-        with open(save_dir / "documents.pkl", "wb") as f:
-            pickle.dump(data, f)
+        # Pickle data to an in-memory byte stream
+        with io.BytesIO() as bio:
+            pickle.dump(data, bio)
+            bio.seek(0)
+            s3_handler.write_file_content(f"{s3_prefix}/documents.pkl", bio.read(), 'application/octet-stream')
 
-        print(f"Index saved to {save_dir}")
+        print(f"Index saved to S3 at prefix {s3_prefix}")
 
-    def load_index(self, path: str) -> None:
+    def load_index_from_s3(self, s3_handler, s3_prefix: str) -> None:
         """
-        Load FAISS index and document metadata from disk.
+        Load FAISS index and document metadata from an S3 bucket.
 
         Args:
-            path: Directory path containing saved index files
+            s3_handler: An instance of the S3Handler class.
+            s3_prefix: The key prefix (folder) in S3 to load from.
         """
         import pickle
-        from pathlib import Path
-
-        load_dir = Path(path)
 
         # Load FAISS index
-        index_path = load_dir / "index.faiss"
-        if index_path.exists():
-            self.index = faiss.read_index(str(index_path))
-        else:
-            raise FileNotFoundError(f"FAISS index not found at {index_path}")
+        index_key = f"{s3_prefix}/index.faiss"
+        index_obj = s3_handler.s3_client.get_object(Bucket=s3_handler.bucket_name, Key=index_key)
+        index_bytes = index_obj['Body'].read()
+        self.index = faiss.deserialize_index(index_bytes)
 
         # Load document metadata and embeddings
-        docs_path = load_dir / "documents.pkl"
-        if docs_path.exists():
-            with open(docs_path, "rb") as f:
-                data = pickle.load(f)
-                self.documents = data.get('documents', [])
-                self.embeddings = data.get('embeddings')
-        else:
-            raise FileNotFoundError(f"Documents file not found at {docs_path}")
+        docs_key = f"{s3_prefix}/documents.pkl"
+        docs_obj = s3_handler.s3_client.get_object(Bucket=s3_handler.bucket_name, Key=docs_key)
+        data = pickle.loads(docs_obj['Body'].read())
+        self.documents = data.get('documents', [])
+        self.embeddings = data.get('embeddings')
 
-        print(f"Index loaded from {load_dir}: {len(self.documents)} documents")
+        print(f"Index loaded from S3 prefix {s3_prefix}: {len(self.documents)} documents")

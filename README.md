@@ -57,7 +57,7 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Literature Intelligence
 - **PDF Knowledge Base**: Upload and index research papers (PDFs) to create a searchable local library.
 - **Semantic Search**: Use natural language queries to find relevant sections across your uploaded literature.
-- **AI Summarization**: Generate summaries of search results to quickly understand the state of the art, powered by a local LLM (like Llama 3) via **Ollama**.
+- **AI Summarization (Demo Mode)**: Generates a mock summary of search results to showcase the feature's place in the workflow. This runs instantly without external dependencies.
 - **Session Persistence**: Save and load literature review sessions. FAISS indexes, search history, and annotations are preserved to disk for long-term storage.
 - **Search History**: Browse previous queries and their results within any saved session.
 - **Text Highlighting**: Select and highlight text in search results with color-coded annotations and optional notes.
@@ -67,21 +67,28 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
 - **Version Control**: Automatic saving of data, configurations, and modifications to ensure full reproducibility and lineage tracking.
 - **Persistent Storage**: All annotations (graph notes, literature highlights) are stored as JSON files for long-term access across sessions.
+- **Cloud-Native Storage**: All experiment and literature artifacts are stored in a cloud object store (like AWS S3) to ensure data persistence and scalability in a deployed environment.
 
 ---
 
 ## 🏁 Getting Started
 
 ### Prerequisites
-*   **Node.js** (v18 or newer) and **npm** for the React frontend.
-*   **Python** (v3.9 or newer) and **pip** for the FastAPI backend.
-*   **(Optional) Ollama**: For the AI summarization feature, you need to have [Ollama](https://ollama.com/) installed and running with a model like Llama 3 (`ollama run llama3`).
+*   **Node.js** (v18+) and **npm** for the React frontend.
+*   **Python** (v3.9+) and **pip** for the FastAPI backend.
+*   **AWS Account & S3 Bucket**: The backend requires an S3 bucket for persistent storage of experiment artifacts.
 
 ### Installation & Running
 
 The application must be run in two separate terminal sessions: one for the backend and one for the frontend.
 
 **1. Run the Backend API:**
+
+First, create a `.env` file in the root directory and add your AWS and Ollama configuration:
+```.env
+S3_BUCKET_NAME=your-s3-bucket-name
+```
+
 ```bash
 # Navigate to the project directory
 cd /path/to/SynthLab
@@ -93,7 +100,6 @@ source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Start the backend server
 uvicorn api:app --reload
 ```
 The backend will be running at `http://127.0.0.1:8000`.
