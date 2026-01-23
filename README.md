@@ -22,6 +22,8 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### User Interface
 - **Experiment History / Lab Notebook**: For full reproducibility, every synthesis run is saved as an "Experiment." The History tab provides a persistent, browsable log of all previous runs, allowing you to review the exact configuration and visual reports for any experiment at any time.
 - **Interactive Visualization Dashboard**: Automatically generated after each synthesis run, this dashboard provides rich, interactive Plotly charts to visually compare the original and synthetic datasets.
+- **Clickable Graph Cards**: Distribution plots and correlation heatmaps are displayed as clickable thumbnail cards. Click to expand any graph into a full-size interactive modal.
+- **Graph Annotations**: Add persistent notes and comments directly on any graph (similar to Google Docs comments). Annotations are saved per-experiment and displayed as markers on the chart.
 - **Hyperparameter Tuning**: Directly from the UI, you can now configure key model parameters like `Epochs` to fine-tune the performance and quality of the synthesizer (e.g., CTGAN).
 - **Tabbed Navigation**: Easily switch between the Data Generator, History, Literature Review, and Settings modules.
 - **Responsive Design**: A clean, modern interface built with TailwindCSS that works on various screen sizes.
@@ -56,11 +58,15 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **PDF Knowledge Base**: Upload and index research papers (PDFs) to create a searchable local library.
 - **Semantic Search**: Use natural language queries to find relevant sections across your uploaded literature.
 - **AI Summarization**: Generate summaries of search results to quickly understand the state of the art (requires Anthropic API key).
+- **Session Persistence**: Save and load literature review sessions. FAISS indexes, search history, and annotations are preserved to disk for long-term storage.
+- **Search History**: Browse previous queries and their results within any saved session.
+- **Text Highlighting**: Select and highlight text in search results with color-coded annotations and optional notes.
 
 ### Collaboration & Versioning
-- **Annotation Layers**: Allow users to add Markdown notes to a generation run (e.g., "Increased privacy constraints for IRB approval").
+- **Annotation Layers**: Add Markdown notes to a generation run and place positional annotations directly on graphs for precise commentary.
 - **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
 - **Version Control**: Automatic saving of data, configurations, and modifications to ensure full reproducibility and lineage tracking.
+- **Persistent Storage**: All annotations (graph notes, literature highlights) are stored as JSON files for long-term access across sessions.
 
 ---
 
@@ -120,13 +126,28 @@ SynthLab/
 │       ├── config.json
 │       ├── report.json
 │       ├── notes.md
+│       ├── annotations.json    # Graph annotations (positional notes)
 │       └── synthetic_data.csv
+├── literature/             # Persistent literature review sessions
+│   └── {session_id}/
+│       ├── session.json        # Session metadata
+│       ├── queries.json        # Search history
+│       ├── annotations.json    # Text highlights
+│       ├── index.faiss         # FAISS vector index
+│       └── documents.pkl       # Document embeddings
 ├── data/
 │   ├── raw/
 │   └── synthetic/
 └── src/
     ├── App.jsx             # Main React application component
     ├── components/         # React UI components
+    │   ├── AnnotationLayer.jsx     # Graph annotation overlay
+    │   ├── ComparisonDashboard.jsx # Clickable graph cards + modal
+    │   ├── ExperimentDetail.jsx    # Experiment detail view
+    │   ├── ExperimentHistory.jsx   # Experiment list
+    │   ├── HighlightableText.jsx   # Text highlighting for literature
+    │   ├── LiteratureHistory.jsx   # Literature session history
+    │   └── Results.jsx             # Tabbed results display
     └── modules/            # Core Python data science modules
 ```
 
