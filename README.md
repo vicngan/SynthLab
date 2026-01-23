@@ -57,7 +57,7 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Literature Intelligence
 - **PDF Knowledge Base**: Upload and index research papers (PDFs) to create a searchable local library.
 - **Semantic Search**: Use natural language queries to find relevant sections across your uploaded literature.
-- **AI Summarization**: Generate summaries of search results to quickly understand the state of the art (requires Anthropic API key).
+- **AI Summarization**: Generate summaries of search results to quickly understand the state of the art, powered by a local LLM (like Llama 3) via **Ollama**.
 - **Session Persistence**: Save and load literature review sessions. FAISS indexes, search history, and annotations are preserved to disk for long-term storage.
 - **Search History**: Browse previous queries and their results within any saved session.
 - **Text Highlighting**: Select and highlight text in search results with color-coded annotations and optional notes.
@@ -75,6 +75,7 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Prerequisites
 *   **Node.js** (v18 or newer) and **npm** for the React frontend.
 *   **Python** (v3.9 or newer) and **pip** for the FastAPI backend.
+*   **(Optional) Ollama**: For the AI summarization feature, you need to have [Ollama](https://ollama.com/) installed and running with a model like Llama 3 (`ollama run llama3`).
 
 ### Installation & Running
 
@@ -91,9 +92,6 @@ source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 
 # Install Python dependencies
 pip install -r requirements.txt
-
-# (Optional) Create a .env file for API keys
-# echo "ANTHROPIC_API_KEY=your_key_here" > .env
 
 # Start the backend server
 uvicorn api:app --reload

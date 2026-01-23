@@ -21,3 +21,4 @@ passlib[bcrypt]
 argon2-cffi
 pyarrow
 fhir.resources
+ollama

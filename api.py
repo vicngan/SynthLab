@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 import uuid
+import ollama
 from fpdf import FPDF
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, BackgroundTasks
@@ -107,6 +108,56 @@ class LiteratureAnnotation(BaseModel):
 
 class SaveSessionRequest(BaseModel):
     name: str
+
+# --- Local LLM Summarization ---
+def summarize_with_ollama(query: str, results: list, model: str = 'llama3') -> str:
+    """
+    Generates a summary of search results using a local LLM with Ollama.
+
+    Args:
+        query: The user's search query.
+        results: A list of search result documents.
+        model: The name of the Ollama model to use for summarization.
+
+    Returns:
+        The generated summary as a string.
+    """
+    if not results:
+        return "No results to summarize."
+
+    context = "\n\n".join([f"Source {i+1}: {res['content']}" for i, res in enumerate(results)])
+    
+    system_prompt = "You are a helpful research assistant. Your task is to synthesize information from the provided search results into a concise summary that directly answers the user's query."
+    
+    prompt = f"""
+    User Query: "{query}"
+
+    Please use the following search results to write your summary:
+    {context}
+
+    Concise Summary:
+    """
+
+    try:
+        # Using ollama.chat for better conversational control and system prompts
+        response = ollama.chat(
+            model=model,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': prompt},
+            ],
+        )
+        return response['message']['content']
+    except ollama.ResponseError as e:
+        # Handle errors from the Ollama API (e.g., model not found)
+        print(f"Ollama API error: {e.error}")
+        if "model" in e.error and "not found" in e.error:
+             return f"Error: The model '{model}' was not found by Ollama. Please make sure you have run `ollama pull {model}`."
+        return f"An error occurred with the Ollama API: {e.error}"
+    except Exception as e:
+        # Handle other exceptions, like connection errors from httpx
+        print(f"Error connecting to Ollama or during summary generation: {e}")
+        return "Failed to generate summary. Please ensure the Ollama service is running and accessible."
 
 # --- Background Task Logic ---
 def check_shutdown():
@@ -548,7 +599,7 @@ async def upload_literature(files: List[UploadFile] = File(...)):
 
 
 @app.post("/api/literature/search")
-async def search_literature(session_id: str = Form(...), query: str = Form(...)):
+async def search_literature(session_id: str = Form(...), query: str = Form(...), model: str = Form('llama3')):
     if session_id not in literature_sessions:
         raise HTTPException(status_code=404, detail="Invalid or expired session ID.")
 
@@ -556,9 +607,10 @@ async def search_literature(session_id: str = Form(...), query: str = Form(...))
 
     try:
         results = literature_search.search(query, top_k=5)
-        summary = "Could not generate summary."
+        summary = "Summary could not be generated."
         if results:
-             summary = literature_search.summarize_results(query, results)
+             # Pass the model name from the request to the summarization function
+             summary = summarize_with_ollama(query, results, model=model)
 
         return {"results": results, "summary": summary}
     except Exception as e:
