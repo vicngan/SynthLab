@@ -2,13 +2,11 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
-from dotenv import load_dotenv
-load_dotenv()
-
+import pickle
+import anthropic
+import json
 try: 
     from PyPDF2 import PdfReader
-    from sentence_transformers import SentenceTransformer
-    import faiss
     LITERATURE_AVAILABLE = True
 except ImportError:
     LITERATURE_AVAILABLE = False
@@ -19,27 +17,24 @@ class LiteratureSearch:
     Upload a PDF of research papers and find relevant sections based on input queries.
     """
 
-    def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
-
+    def __init__(self):
         """
-        Initializes the LiteratureSearch with a PDF file and a sentence transformer model.
+        Initializes the LiteratureSearch with the Anthropic Claude API.
         
         Args:
-            pdf_path (str): Path to the PDF file containing research papers.
-            model_name (str): Name of the pre-trained sentence transformer model to use.
+            None
         """
-
         if not LITERATURE_AVAILABLE:
-            raise ImportError("Required libraries for LiteratureSearch are not installed.")
+            raise ImportError("PyPDF2 is not installed. Please run: pip install PyPDF2")
         
-        print(f"Loading PDF and initializing model : {model_name}...")
-    
-        self.model = SentenceTransformer(model_name)
-        self.embeddings = None
-        self.documents = [] #list of document texts
-        self.text_chunks = []
-        self.index = None
-        print("Initialization complete. Model loaded and PDF processed!")
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set.")
+        
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model_name = "claude-3-haiku-20240307" # Fast and capable
+        self.documents = [] # List of dicts: {'filename': str, 'page_number': int, 'text': str}
+        print("LiteratureSearch initialized with Anthropic Claude API.")
 
     def extract_text_from_pdf(self, pdf_path: str) -> List[str]:
         """
@@ -68,25 +63,6 @@ class LiteratureSearch:
         print(f"Extracted text from {len(pages)} pages in {filename}.")
         return pages
     
-    def add_pdf(self, pdf_path: str) -> int:
-        """
-        Adds another PDF file to the existing literature search index.
-        
-        Args:
-            pdf_path (str): Path to the PDF file.
-
-        Returns:
-            int: Number of new pages added.
-        """
-
-        new_pages = self.extract_text_from_pdf(pdf_path)
-        self.documents.extend(new_pages)
-        self._process_text_chunks(new_pages)
-        self._rebuild_index()
-        print(f"Added {len(new_pages)} pages from {Path(pdf_path).name} to the index.") 
-
-        return len(new_pages)
-    
     def add_pdf_bytes(self, pdf_bytes: bytes, filename: str = "uploaded.pdf") -> int:
         """
         Adds a PDF file from bytes to the existing literature search index.
@@ -112,57 +88,68 @@ class LiteratureSearch:
                 })
         
         self.documents.extend(new_pages)
-        self._rebuild_index()
-        print(f"Added {len(new_pages)} pages from {filename} to the index.")
+        print(f"Added {len(new_pages)} pages from {filename} to the context.")
         return len(new_pages)
     
-    def _rebuild_index(self):
-        """
-        Rebuilds the FAISS index with current text chunks.
-        """
-
-        if not self.documents:
-            return
-        
-        text = [doc['text'] for doc in self.documents]
-        self.embeddings = self.model.encode(text, show_progress_bar=True)
-
-        #build FAISS index
-        dimension = self.embeddings.shape[1]
-        self.index = faiss.IndexFlatL2(dimension)
-        self.index.add(self.embeddings.astype('float32'))
-        print(f"FAISS index rebuilt with {self.index.ntotal} documents.")
-
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """
         Searches for the most relevant document sections based on the input query.
         
         Args:
             query (str): The search query.
-            top_k (int): Number of top results to return.
+            top_k (int): Number of top results to return (used in prompt).
         Returns:
-            List[Dict]: List of top_k relevant document sections with metadata.
+            Dict: A dictionary containing a summary and a list of source results.
         """
+        if not self.documents:
+            return {"summary": "No documents have been uploaded. Please upload PDFs first.", "results": []}
 
-        if not self.documents or self.index is None:
-            print("No documents in the index. Please add PDFs first.")
-            return []
-        
-        #encode the query
-        query_embedding = self.model.encode([query])
+        # Construct the context for Claude
+        context_str = "<documents>\n"
+        for i, doc in enumerate(self.documents):
+            context_str += f"<document index=\"{i}\">\n"
+            context_str += f"  <source>{doc['filename']}, page {doc['page_number']}</source>\n"
+            context_str += f"  <content>\n{doc['text']}\n</content>\n"
+            context_str += "</document>\n"
+        context_str += "</documents>"
 
-        #search in the index
-        distances, indices = self.index.search(query_embedding.astype('float32'), top_k)
+        # Construct the prompt
+        prompt = f"""
+You are a research assistant. Based *only* on the information in the provided documents, answer the following question: "{query}"
 
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx < len(self.documents):
-                doc = self.documents[idx].copy()
-                doc['score'] = float(1/(1 + distances[0][i]))  #convert distance to similarity score
-                doc['text_snippet'] = doc['text'][:500] + ("..." if len(doc['text']) > 500 else "")
-                results.append(doc)
-            
-        return results
+1.  First, provide a concise, synthesized summary that directly answers the question.
+2.  After the summary, identify the {top_k} most relevant source documents you used. For each source, return its index, filename, and page number.
+3.  For each cited source, also provide a "score" from 0.0 to 1.0 indicating its relevance to the query, and include the full text of that source page.
+
+Respond in the following JSON format. Do not include any text outside of the JSON block.
+
+{{
+  "summary": "Your synthesized answer here.",
+  "results": [
+    {{
+      "index": <document_index_int>,
+      "filename": "source_filename.pdf",
+      "page_number": <page_number_int>,
+      "score": <relevance_score_float>,
+      "text": "The full text content of the cited document page..."
+    }}
+  ]
+}}
+"""
+        try:
+            message = self.client.messages.create(model=self.model_name, max_tokens=4096, temperature=0.1, system=context_str, messages=[{"role": "user", "content": prompt}]).content[0].text
+            json_start = message.find('{')
+            json_end = message.rfind('}') + 1
+            if json_start == -1 or json_end == 0: raise ValueError("Claude did not return a valid JSON object.")
+            json_str = message[json_start:json_end]
+            response_data = json.loads(json_str)
+            for result in response_data.get("results", []):
+                doc_index = result.get("index")
+                if doc_index is not None and 0 <= doc_index < len(self.documents): result["text"] = self.documents[doc_index]["text"]
+            return response_data
+        except Exception as e:
+            print(f"Error calling Claude API: {e}")
+            return {"summary": f"An error occurred while contacting the AI model: {e}", "results": []}
     
     def get_stats(self) -> Dict:
         """
@@ -185,57 +172,27 @@ class LiteratureSearch:
             'files': files
         }
     
-    def save_index_to_s3(self, s3_handler, s3_prefix: str) -> None:
+    def save_session(self, path: Path):
         """
-        Save FAISS index and document metadata to an S3 bucket.
-
-        Args:
-            s3_handler: An instance of the S3Handler class.
-            s3_prefix: The key prefix (folder) in S3 to save to.
+        Saves the current literature session (the object itself) to a file.
         """
-        import pickle
-        import io
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+        print(f"Literature session saved to {path}")
 
-        # Save FAISS index
-        if self.index is not None:
-            # Serialize index to bytes
-            index_bytes = faiss.serialize_index(self.index)
-            s3_handler.write_file_content(f"{s3_prefix}/index.faiss", index_bytes, 'application/octet-stream')
-
-        # Save document metadata and embeddings
-        data = {
-            'documents': self.documents,
-            'embeddings': self.embeddings
-        }
-        # Pickle data to an in-memory byte stream
-        with io.BytesIO() as bio:
-            pickle.dump(data, bio)
-            bio.seek(0)
-            s3_handler.write_file_content(f"{s3_prefix}/documents.pkl", bio.read(), 'application/octet-stream')
-
-        print(f"Index saved to S3 at prefix {s3_prefix}")
-
-    def load_index_from_s3(self, s3_handler, s3_prefix: str) -> None:
+    @staticmethod
+    def load_session(path: Path) -> 'LiteratureSearch':
         """
-        Load FAISS index and document metadata from an S3 bucket.
-
-        Args:
-            s3_handler: An instance of the S3Handler class.
-            s3_prefix: The key prefix (folder) in S3 to load from.
+        Loads a literature session from a file.
         """
-        import pickle
-
-        # Load FAISS index
-        index_key = f"{s3_prefix}/index.faiss"
-        index_obj = s3_handler.s3_client.get_object(Bucket=s3_handler.bucket_name, Key=index_key)
-        index_bytes = index_obj['Body'].read()
-        self.index = faiss.deserialize_index(index_bytes)
-
-        # Load document metadata and embeddings
-        docs_key = f"{s3_prefix}/documents.pkl"
-        docs_obj = s3_handler.s3_client.get_object(Bucket=s3_handler.bucket_name, Key=docs_key)
-        data = pickle.loads(docs_obj['Body'].read())
-        self.documents = data.get('documents', [])
-        self.embeddings = data.get('embeddings')
-
-        print(f"Index loaded from S3 prefix {s3_prefix}: {len(self.documents)} documents")
+        if not path.exists():
+            raise FileNotFoundError(f"Session file not found: {path}")
+        with open(path, "rb") as f:
+            session = pickle.load(f)
+        print(f"Literature session loaded from {path}")
+        # Re-initialize the non-serializable client
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key: raise ValueError("ANTHROPIC_API_KEY not set.")
+        session.client = anthropic.Anthropic(api_key=api_key)
+        return session

@@ -4,53 +4,92 @@ import sys
 import os
 import json
 import threading
-import signal
-from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 import time
 import uuid
-import boto3
+
+from dotenv import load_dotenv
 from fpdf import FPDF
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Load environment variables from .env file for local development
-load_dotenv()
+# --- Local Storage Configuration ---
+EXPERIMENTS_DIR = Path("experiments")
+LITERATURE_DIR = Path("literature")
 
-# --- S3 Configuration ---
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+class LocalStorageHandler:
+    def __init__(self):
+        EXPERIMENTS_DIR.mkdir(exist_ok=True)
+        LITERATURE_DIR.mkdir(exist_ok=True)
+        self._locks = {}
+        self._locks_lock = threading.Lock()
 
-class S3Handler:
-    def __init__(self, bucket_name):
-        if not bucket_name:
-            raise ValueError("S3_BUCKET_NAME environment variable not set.")
-        self.s3_client = boto3.client("s3")
-        self.bucket_name = bucket_name
+    def _get_path(self, key: str) -> Path:
+        # The key is the relative path, e.g., "experiments/exp_123/config.json"
+        return Path(key)
 
-    def read_json(self, key):
-        obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
-        return json.loads(obj["Body"].read().decode("utf-8"))
+    def read_json(self, key: str):
+        path = self._get_path(key)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {path}")
 
-    def write_json(self, key, data):
-        self.s3_client.put_object(Bucket=self.bucket_name, Key=key, Body=json.dumps(data, indent=4))
+    def write_json(self, key: str, data: dict):
+        path = self._get_path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
 
-    def write_file_content(self, key, content, content_type='text/plain'):
-        self.s3_client.put_object(Bucket=self.bucket_name, Key=key, Body=content, ContentType=content_type)
+    def write_file_content(self, key: str, content, content_type=None): # content_type is unused for local
+        path = self._get_path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        mode = "wb" if isinstance(content, bytes) else "w"
+        encoding = None if isinstance(content, bytes) else "utf-8"
+        with open(path, mode, encoding=encoding) as f:
+            f.write(content)
 
-    def generate_presigned_url(self, key, expiration=3600):
-        return self.s3_client.generate_presigned_url('get_object', Params={'Bucket': self.bucket_name, 'Key': key}, ExpiresIn=expiration)
+    def read_file_content(self, key: str):
+        path = self._get_path(key)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {path}")
 
-s3_handler = S3Handler(S3_BUCKET_NAME) if S3_BUCKET_NAME else None
+    def list_dirs(self, prefix: str):
+        path = Path(prefix)
+        if not path.exists():
+            return []
+        # Sort by name descending, which is a good proxy for chronological order
+        return sorted([d.name for d in path.iterdir() if d.is_dir()], reverse=True)
+
+    def file_exists(self, key: str):
+        return self._get_path(key).exists()
+
+    def get_lock(self, key: str) -> threading.Lock:
+        """Returns a lock for a specific file path to prevent race conditions."""
+        with self._locks_lock:
+            if key not in self._locks:
+                self._locks[key] = threading.Lock()
+            return self._locks[key]
+
+storage_handler = LocalStorageHandler()
 
 # --- Graceful Shutdown Support ---
 shutdown_event = threading.Event()
 active_tasks = set()
 active_tasks_lock = threading.Lock()
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add src directory to sys.path for module imports
 # sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -58,9 +97,19 @@ active_tasks_lock = threading.Lock()
 from src.modules.data_loader import DataLoader
 from src.modules.synthesizer import SyntheticGenerator
 from src.modules.stress_test import QualityReport
-from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
 from src.modules.clinical import ClinicalAnalyzer
 from src.modules.fhir_converter import FHIRConverter
+from src.modules.literature import LiteratureSearch, LITERATURE_AVAILABLE
+from src.modules.model_cache import ModelCache
+from src.modules.constraint_manager import ConstraintManager, create_clinical_labs_template
+
+# --- Caching and Constraint Manager Initialization ---
+# Initialize the model cache. This will create a 'cache/models' directory.
+model_cache = ModelCache(enabled=True)
+
+# Initialize a default constraint manager with clinical constraints.
+# In a more advanced setup, you might load different profiles based on user input.
+clinical_constraint_manager = create_clinical_labs_template()
 
 # --- Lifespan Context Manager for Graceful Shutdown ---
 @asynccontextmanager
@@ -115,8 +164,6 @@ app.add_middleware(
 # --- Ollama Client Initialization ---
 # Use a remote Ollama host if specified, otherwise default to local.
 # --- In-Memory Storage for Literature Search ---
-# In a real-world app, you'd use a more robust solution like Redis or a database.
-literature_sessions = {}
 jobs = {}
 
 # --- Pydantic Models ---
@@ -133,45 +180,13 @@ class GraphAnnotation(BaseModel):
     timestamp: str = None
     resolved: bool = False
 
-class LiteratureAnnotation(BaseModel):
-    id: str = None
-    query_id: str
-    result_index: int
-    start: int
-    end: int
-    comment: str
-    color: str = "yellow"
-    timestamp: str = None
-
-class SaveSessionRequest(BaseModel):
+class LitSessionSave(BaseModel):
     name: str
 
-# --- Local LLM Summarization ---
-def summarize_with_ollama(query: str, results: list, model: str = 'demo_model') -> str:
-    """
-    Simulates an AI analysis for the demo.
-    """
-    # 1. Fake the "thinking" time so it feels real
-    time.sleep(1.5) 
-    
-    # 2. Return a professional-sounding "fake" result
-    return (
-        "**[AI ANALYSIS COMPLETE]**\n\n"
-        "**Summary:** The uploaded clinical dataset contains longitudinal patient records "
-        "focused on disease progression markers. Key variables identified include "
-        "demographic constraints and physiological vitals.\n\n"
-        "**Privacy Assessment:** The synthetic data generation successfully preserves "
-        "k-anonymity while maintaining statistical fidelity (Correlation: 0.89). "
-        "No direct PII leakage was detected in the sample."
-    )
+class LitSearchRequest(BaseModel):
+    session_id: str
+    query: str
 
-# --- API Endpoint for Listing Ollama Models ---
-@app.get("/api/ollama/models")
-def get_ollama_models():
-    """
-    Returns a mock model list for demo purposes.
-    """
-    return {"models": [{"name": "demo_model:latest", "model": "demo_model:latest"}]}
 
 # --- Background Task Logic ---
 def check_shutdown():
@@ -195,9 +210,9 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
             raise InterruptedError("Shutdown requested before task started")
 
         # Update status to running
-        config = s3_handler.read_json(config_key)
+        config = storage_handler.read_json(config_key)
         config["status"] = "running"
-        s3_handler.write_json(config_key, config)
+        storage_handler.write_json(config_key, config)
         df = pd.read_csv(io.StringIO(file_contents.decode('utf-8')))
         loader = DataLoader()
         clean_df, _ = loader.clean_data(df)
@@ -214,12 +229,14 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         if check_shutdown():
             raise InterruptedError("Shutdown requested before model training")
 
-        # Pass epsilon to the generator
+        # Pass epsilon, cache, and constraint manager to the generator
         generator = SyntheticGenerator(
             method=method,
             epsilon=epsilon if epsilon > 0 else None,
             sequence_key=sequence_key,
-            sequence_index=sequence_index
+            sequence_index=sequence_index,
+            cache=model_cache,
+            constraint_manager=clinical_constraint_manager
         )
         generator.train(clean_df)
 
@@ -254,29 +271,29 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
 
         # Save full report and data
         full_report = {**config, "status": "completed", "quality_report": {"column_stats": stats}, "privacy_report": {**privacy_check, "dcr": dcr}, "fairness_report": fairness_results, "plots": {"distributions": dist_plots_json, "correlations": corr_plots_json}, "clinical_report": clinical_analysis}
-        s3_handler.write_json(f"{exp_key_prefix}/report.json", full_report)
+        storage_handler.write_json(f"{exp_key_prefix}/report.json", full_report)
 
         csv_buffer = io.StringIO()
         synthetic_data.to_csv(csv_buffer, index=False)
-        s3_handler.write_file_content(f"{exp_key_prefix}/synthetic_data.csv", csv_buffer.getvalue(), 'text/csv')
+        storage_handler.write_file_content(f"{exp_key_prefix}/synthetic_data.csv", csv_buffer.getvalue())
 
         # Update in-memory job status to completed
         jobs[experiment_id] = {"status": "completed", "experiment_id": experiment_id, "result": full_report}
 
     except InterruptedError as e:
         print(f"Task {experiment_id} interrupted: {e}")
-        config = s3_handler.read_json(config_key)
+        config = storage_handler.read_json(config_key)
         config["status"] = "cancelled"
         config["error"] = str(e)
-        s3_handler.write_json(config_key, config)
+        storage_handler.write_json(config_key, config)
         jobs[experiment_id] = {"status": "cancelled", "error": str(e), "experiment_id": experiment_id}
 
     except Exception as e:
         print(f"Task failed: {e}")
-        config = s3_handler.read_json(config_key)
+        config = storage_handler.read_json(config_key)
         config["status"] = "failed"
         config["error"] = str(e)
-        s3_handler.write_json(config_key, config)
+        storage_handler.write_json(config_key, config)
         jobs[experiment_id] = {"status": "failed", "error": str(e), "experiment_id": experiment_id}
 
     finally:
@@ -303,9 +320,6 @@ async def synthesize_data(
     if file.content_type != 'text/csv':
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV file.")
 
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     try:
         contents = await file.read()
         
@@ -328,7 +342,7 @@ async def synthesize_data(
             "privacy_report": {},
             "clinical_report": {}
         }
-        s3_handler.write_json(f"experiments/{experiment_id}/config.json", config)
+        storage_handler.write_json(f"experiments/{experiment_id}/config.json", config)
 
         # Initialize job status
         jobs[experiment_id] = {"status": "pending", "experiment_id": experiment_id}
@@ -344,24 +358,18 @@ async def synthesize_data(
 
 @app.get("/api/experiments")
 def list_experiments():
-    if not s3_handler:
-        return []
-
     experiments = []
-    paginator = s3_handler.s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=s3_handler.bucket_name, Prefix='experiments/', Delimiter='/')
+    exp_dirs = storage_handler.list_dirs('experiments')
 
-    for page in pages:
-        for prefix in page.get('CommonPrefixes', []):
-            exp_id = prefix.get('Prefix').split('/')[-2]
-            config_key = f"experiments/{exp_id}/config.json"
-            try:
-                config = s3_handler.read_json(config_key)
-                experiments.append(config)
-            except s3_handler.s3_client.exceptions.NoSuchKey:
-                print(f"Warning: config.json not found for experiment {exp_id}")
-            except Exception as e:
-                print(f"Error reading config for {exp_id}: {e}")
+    for exp_id in exp_dirs:
+        config_key = f"experiments/{exp_id}/config.json"
+        try:
+            config = storage_handler.read_json(config_key)
+            experiments.append(config)
+        except FileNotFoundError:
+            print(f"Warning: config.json not found for experiment {exp_id}")
+        except Exception as e:
+            print(f"Error reading config for {exp_id}: {e}")
 
     # Sort by timestamp descending (newest first)
     experiments.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -369,75 +377,64 @@ def list_experiments():
 
 @app.get("/api/experiments/{experiment_id}")
 def get_experiment(experiment_id: str):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     response = {}
     exp_key_prefix = f"experiments/{experiment_id}"
 
     try:
         # Try to load the full report first
-        response = s3_handler.read_json(f"{exp_key_prefix}/report.json")
-    except s3_handler.s3_client.exceptions.NoSuchKey:
+        response = storage_handler.read_json(f"{exp_key_prefix}/report.json")
+    except FileNotFoundError:
         try:
             # Fallback to config if report not ready
-            response = s3_handler.read_json(f"{exp_key_prefix}/config.json")
-        except s3_handler.s3_client.exceptions.NoSuchKey:
+            response = storage_handler.read_json(f"{exp_key_prefix}/config.json")
+        except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Experiment not found")
 
     # Load synthetic data preview
     try:
         csv_key = f"{exp_key_prefix}/synthetic_data.csv"
-        # Use a presigned URL to read the CSV directly into pandas
-        csv_url = s3_handler.generate_presigned_url(csv_key)
-        if csv_url:
-            df = pd.read_csv(csv_url, nrows=100)
+        if storage_handler.file_exists(csv_key):
+            df = pd.read_csv(csv_key, nrows=100)
             response["synthetic_data"] = df.head(100).to_dict(orient='records')
+        else:
+            response["synthetic_data"] = []
     except Exception as e:
         print(f"Could not load synthetic data preview for {experiment_id}: {e}")
         response["synthetic_data"] = []
 
     # Load Notes
     try:
-        notes_obj = s3_handler.s3_client.get_object(Bucket=s3_handler.bucket_name, Key=f"{exp_key_prefix}/notes.md")
-        response["notes"] = notes_obj["Body"].read().decode("utf-8")
-    except s3_handler.s3_client.exceptions.NoSuchKey:
+        response["notes"] = storage_handler.read_file_content(f"{exp_key_prefix}/notes.md")
+    except FileNotFoundError:
         response["notes"] = ""
 
     return response
 
 @app.put("/api/experiments/{experiment_id}/notes")
 def update_notes(experiment_id: str, note: NoteUpdate):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-    
     notes_key = f"experiments/{experiment_id}/notes.md"
-    s3_handler.write_file_content(notes_key, note.notes)
+    storage_handler.write_file_content(notes_key, note.notes)
     
     return {"status": "success", "notes": note.notes}
 
 @app.get("/api/experiments/{experiment_id}/download")
 def download_experiment_data(experiment_id: str):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
+    file_path = EXPERIMENTS_DIR / experiment_id / "synthetic_data.csv"
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found.")
     
-    file_key = f"experiments/{experiment_id}/synthetic_data.csv"
-    try:
-        # Generate a presigned URL for the client to download from
-        url = s3_handler.generate_presigned_url(file_key)
-        return {"url": url}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Dataset not found or could not generate URL: {e}")
+    return FileResponse(
+        path=file_path,
+        filename=f"synthetic_data_{experiment_id}.csv",
+        media_type='text/csv'
+    )
 
 @app.get("/api/experiments/{experiment_id}/certificate")
 def generate_certificate(experiment_id: str):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     report_key = f"experiments/{experiment_id}/report.json"
     try:
-        report = s3_handler.read_json(report_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
+        report = storage_handler.read_json(report_key)
+    except FileNotFoundError:
         raise HTTPException(status_code=400, detail="Experiment report not generated yet")
         
     # Create PDF in memory
@@ -483,35 +480,41 @@ def generate_certificate(experiment_id: str):
     
     pdf_content = pdf.output(dest='S').encode('latin1')
     
-    # Upload PDF to S3 and return a presigned URL
+    # Save PDF to local experiments folder and return it
     cert_key = f"experiments/{experiment_id}/compliance_certificate.pdf"
-    s3_handler.write_file_content(cert_key, pdf_content, 'application/pdf')
-    url = s3_handler.generate_presigned_url(cert_key)
+    storage_handler.write_file_content(cert_key, pdf_content, 'application/pdf')
     
-    return {"url": url}
+    return FileResponse(
+        path=Path(cert_key),
+        filename=f"compliance_certificate_{experiment_id}.pdf",
+        media_type='application/pdf'
+    )
 
 @app.get("/api/experiments/{experiment_id}/download/fhir")
 def download_experiment_fhir(experiment_id: str):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     csv_key = f"experiments/{experiment_id}/synthetic_data.csv"
+    csv_path = Path(csv_key)
+    if not csv_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Dataset not found: {csv_key}")
+
     try:
-        csv_url = s3_handler.generate_presigned_url(csv_key)
-        df = pd.read_csv(csv_url)
+        df = pd.read_csv(csv_path)
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Dataset not found: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reading dataset: {e}")
         
     # Convert and get JSON content
     converter = FHIRConverter()
     fhir_json_str = converter.convert_to_patient_bundle(df)
     
-    # Upload FHIR JSON to S3 and return presigned URL
+    # Save FHIR JSON to local experiments folder and return it
     fhir_key = f"experiments/{experiment_id}/synthetic_data_fhir.json"
-    s3_handler.write_file_content(fhir_key, fhir_json_str, 'application/json')
-    url = s3_handler.generate_presigned_url(fhir_key)
-        
-    return {"url": url}
+    storage_handler.write_file_content(fhir_key, fhir_json_str, 'application/json')
+    
+    return FileResponse(
+        path=Path(fhir_key),
+        filename=f"synthetic_data_fhir_{experiment_id}.json",
+        media_type='application/json'
+    )
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
@@ -520,307 +523,138 @@ def get_job_status(job_id: str):
 # --- Graph Annotation Endpoints ---
 @app.get("/api/experiments/{experiment_id}/annotations")
 def get_annotations(experiment_id: str):
-    if not s3_handler:
-        return {"graph_annotations": []}
-
     annotations_key = f"experiments/{experiment_id}/annotations.json"
     try:
-        return s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
+        return storage_handler.read_json(annotations_key)
+    except FileNotFoundError:
         return {"graph_annotations": []}
 
 @app.post("/api/experiments/{experiment_id}/annotations")
 def add_annotation(experiment_id: str, annotation: GraphAnnotation):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     annotations_key = f"experiments/{experiment_id}/annotations.json"
-    try:
-        data = s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        data = {"graph_annotations": []}
+    lock = storage_handler.get_lock(annotations_key)
+    with lock:
+        try:
+            data = storage_handler.read_json(annotations_key)
+        except FileNotFoundError:
+            data = {"graph_annotations": []}
 
-    # Generate ID and timestamp
-    annotation.id = str(uuid.uuid4())
-    annotation.timestamp = pd.Timestamp.now().isoformat()
-    data["graph_annotations"].append(annotation.dict())
+        # Generate ID and timestamp
+        annotation.id = str(uuid.uuid4())
+        annotation.timestamp = pd.Timestamp.now().isoformat()
+        data["graph_annotations"].append(annotation.dict())
 
-    s3_handler.write_json(annotations_key, data)
+        storage_handler.write_json(annotations_key, data)
 
     return annotation
 
 @app.put("/api/experiments/{experiment_id}/annotations/{annotation_id}")
 def update_annotation(experiment_id: str, annotation_id: str, annotation: GraphAnnotation):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     annotations_key = f"experiments/{experiment_id}/annotations.json"
-    try:
-        data = s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Annotations not found")
+    lock = storage_handler.get_lock(annotations_key)
+    with lock:
+        try:
+            data = storage_handler.read_json(annotations_key)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Annotations not found")
 
-    for i, ann in enumerate(data["graph_annotations"]):
-        if ann["id"] == annotation_id:
-            annotation.id = annotation_id
-            annotation.timestamp = pd.Timestamp.now().isoformat()
-            data["graph_annotations"][i] = annotation.dict()
-            s3_handler.write_json(annotations_key, data)
-            return annotation
+        for i, ann in enumerate(data["graph_annotations"]):
+            if ann["id"] == annotation_id:
+                annotation.id = annotation_id
+                annotation.timestamp = pd.Timestamp.now().isoformat()
+                data["graph_annotations"][i] = annotation.dict()
+                storage_handler.write_json(annotations_key, data)
+                return annotation
 
-    raise HTTPException(status_code=404, detail="Annotation not found")
+        raise HTTPException(status_code=404, detail="Annotation not found")
 
 @app.delete("/api/experiments/{experiment_id}/annotations/{annotation_id}")
 def delete_annotation(experiment_id: str, annotation_id: str):
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
     annotations_key = f"experiments/{experiment_id}/annotations.json"
-    try:
-        data = s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Annotations not found")
+    lock = storage_handler.get_lock(annotations_key)
+    with lock:
+        try:
+            data = storage_handler.read_json(annotations_key)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Annotations not found")
 
-    original_len = len(data["graph_annotations"])
-    data["graph_annotations"] = [a for a in data["graph_annotations"] if a["id"] != annotation_id]
+        original_len = len(data["graph_annotations"])
+        data["graph_annotations"] = [a for a in data["graph_annotations"] if a["id"] != annotation_id]
 
-    if len(data["graph_annotations"]) == original_len:
-        raise HTTPException(status_code=404, detail="Annotation not found")
+        if len(data["graph_annotations"]) == original_len:
+            raise HTTPException(status_code=404, detail="Annotation not found")
 
-    s3_handler.write_json(annotations_key, data)
+        storage_handler.write_json(annotations_key, data)
 
     return {"status": "deleted"}
 
+# --- Literature RAG Endpoints ---
 @app.post("/api/literature/upload")
 async def upload_literature(files: List[UploadFile] = File(...)):
     if not LITERATURE_AVAILABLE:
-        raise HTTPException(status_code=501, detail="Literature search feature is not available. Required libraries may be missing.")
-
-    session_id = str(uuid.uuid4())
-    literature_search = LiteratureSearch()
+        raise HTTPException(status_code=501, detail="Literature search dependencies not installed.")
     
+    session_id = f"lit_{uuid.uuid4().hex[:8]}"
+    try:
+        session = LiteratureSearch()
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e)) # For missing API key
+
     for file in files:
         if file.content_type != 'application/pdf':
-            raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}. Please upload PDF files only.")
-        try:
-            contents = await file.read()
-            literature_search.add_pdf_bytes(contents, file.filename)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to process {file.filename}: {e}")
-
-    literature_sessions[session_id] = literature_search
-    stats = literature_search.get_stats()
+            raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}. Please upload PDFs only.")
+        
+        contents = await file.read()
+        session.add_pdf_bytes(contents, filename=file.filename)
+    
+    literature_sessions[session_id] = session
+    stats = session.get_stats()
     
     return {"session_id": session_id, "stats": stats}
 
-
 @app.post("/api/literature/search")
-async def search_literature(session_id: str = Form(...), query: str = Form(...), model: str = Form('llama3')):
-    if session_id not in literature_sessions:
-        raise HTTPException(status_code=404, detail="Invalid or expired session ID.")
+async def search_literature(request: LitSearchRequest):
+    session_id = request.session_id
+    query = request.query
+    
+    session = literature_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Literature session not found or expired.")
+        
+    results = session.search(query)
+    return results
 
-    literature_search = literature_sessions[session_id]
-
-    try:
-        results = literature_search.search(query, top_k=5)
-        summary = "Summary could not be generated."
-        if results:
-             # Pass the model name from the request to the summarization function
-             summary = summarize_with_ollama(query, results, model=model)
-
-        return {"results": results, "summary": summary}
-    except Exception as e:
-        print(f"An error occurred during literature search: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# --- Literature Session Persistence Endpoints ---
 @app.get("/api/literature/sessions")
 def list_literature_sessions():
-    """List all saved literature sessions."""
-    if not s3_handler:
-        return []
-
-    sessions = []
-    paginator = s3_handler.s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=s3_handler.bucket_name, Prefix='literature/', Delimiter='/')
-
-    for page in pages:
-        for prefix in page.get('CommonPrefixes', []):
-            session_id = prefix.get('Prefix').split('/')[-2]
-            config_key = f"literature/{session_id}/session.json"
-            try:
-                config = s3_handler.read_json(config_key)
-                sessions.append(config)
-            except s3_handler.s3_client.exceptions.NoSuchKey:
-                print(f"Warning: session.json not found for session {session_id}")
-            except Exception as e:
-                print(f"Error reading session config for {session_id}: {e}")
-
-    return sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)
+    saved_sessions = []
+    session_dir = LITERATURE_DIR / "sessions"
+    if session_dir.exists():
+        for f in session_dir.glob("*.pkl"):
+            saved_sessions.append({
+                "session_id": f.stem,
+                "name": f.stem.replace("_", " ").title(),
+                "saved_at": pd.Timestamp(f.stat().st_mtime, unit='s').isoformat()
+            })
+    saved_sessions.sort(key=lambda x: x["saved_at"], reverse=True)
+    return saved_sessions
 
 @app.post("/api/literature/sessions/{session_id}/save")
-def save_literature_session(session_id: str, request: SaveSessionRequest):
-    """Save a literature session to disk for persistence."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-    if session_id not in literature_sessions:
-        raise HTTPException(status_code=404, detail="Session not found in memory. Upload PDFs first.")
-
-    s3_prefix = f"literature/{session_id}"
-
-    lit_search = literature_sessions[session_id]
-    stats = lit_search.get_stats()
-
-    # Save session metadata
-    session_data = {
-        "session_id": session_id, "name": request.name, "created_at": pd.Timestamp.now().isoformat(), "updated_at": pd.Timestamp.now().isoformat(), "files": stats.get("files", []), "stats": stats
-    }
-    s3_handler.write_json(f"{s3_prefix}/session.json", session_data)
-
-    # Initialize empty queries file
-    try:
-        s3_handler.s3_client.head_object(Bucket=s3_handler.bucket_name, Key=f"{s3_prefix}/queries.json")
-    except s3_handler.s3_client.exceptions.ClientError:
-        s3_handler.write_json(f"{s3_prefix}/queries.json", {"queries": []})
-
-    # Save FAISS index and documents
-    try:
-        lit_search.save_index_to_s3(s3_handler, s3_prefix)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not save FAISS index to S3: {e}")
-
-    return session_data
-
-@app.get("/api/literature/sessions/{session_id}/load")
-def load_literature_session(session_id: str):
-    """Load a saved literature session back into memory."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
-    s3_prefix = f"literature/{session_id}"
-    session_key = f"{s3_prefix}/session.json"
-
-    try:
-        session_data = s3_handler.read_json(session_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Saved session not found")
-
-    # Create new LiteratureSearch and load index
-    lit_search = LiteratureSearch()
-    try:
-        lit_search.load_index_from_s3(s3_handler, s3_prefix)
-        literature_sessions[session_id] = lit_search
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load session index from S3: {e}")
-
-    return {"session_id": session_id, "session": session_data, "stats": lit_search.get_stats()}
-
-@app.delete("/api/literature/sessions/{session_id}")
-def delete_literature_session(session_id: str):
-    """Delete a saved literature session."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
-    s3_prefix = f"literature/{session_id}/"
-    response = s3_handler.s3_client.list_objects_v2(Bucket=s3_handler.bucket_name, Prefix=s3_prefix)
-
-    if 'Contents' not in response:
-        raise HTTPException(status_code=404, detail="Session not found in S3")
-
-    objects_to_delete = [{'Key': obj['Key']} for obj in response['Contents']]
-    s3_handler.s3_client.delete_objects(Bucket=s3_handler.bucket_name, Delete={'Objects': objects_to_delete})
-
-    # Also remove from memory if present
-    if session_id in literature_sessions:
-        del literature_sessions[session_id]
-
-    return {"status": "deleted", "session_id": session_id}
-
-@app.get("/api/literature/sessions/{session_id}/queries")
-def get_literature_queries(session_id: str):
-    """Get query history for a literature session."""
-    if not s3_handler:
-        return {"queries": []}
+async def save_literature_session(session_id: str, payload: LitSessionSave):
+    session = literature_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Active session not found.")
     
-    queries_key = f"literature/{session_id}/queries.json"
-    try:
-        return s3_handler.read_json(queries_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        return {"queries": []}
-
-@app.post("/api/literature/sessions/{session_id}/queries")
-def save_literature_query(session_id: str, query: str = Form(...), results: str = Form(...), summary: str = Form(...)):
-    """Save a query and its results to the session history."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
-    queries_key = f"literature/{session_id}/queries.json"
-    try:
-        data = s3_handler.read_json(queries_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        data = {"queries": []}
-
-    query_entry = {
-        "id": str(uuid.uuid4()), "query": query, "timestamp": pd.Timestamp.now().isoformat(), "results": json.loads(results) if results else [], "summary": summary
-    }
-    data["queries"].append(query_entry)
-    s3_handler.write_json(queries_key, data)
-
-    return query_entry
-
-# --- Literature Annotation Endpoints ---
-@app.get("/api/literature/sessions/{session_id}/annotations")
-def get_literature_annotations(session_id: str):
-    """Get all annotations for a literature session."""
-    if not s3_handler:
-        return {"highlights": []}
+    session_dir = LITERATURE_DIR / "sessions"
+    safe_name = "".join(c if c.isalnum() else "_" for c in payload.name)
+    save_path = session_dir / f"{safe_name}.pkl"
     
-    annotations_key = f"literature/{session_id}/annotations.json"
-    try:
-        return s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        return {"highlights": []}
+    session.save_session(save_path)
+    
+    return {"status": "success", "name": payload.name, "path": str(save_path)}
 
-@app.post("/api/literature/sessions/{session_id}/annotations")
-def add_literature_annotation(session_id: str, annotation: LiteratureAnnotation):
-    """Add a highlight/annotation to literature results."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
-    annotations_key = f"literature/{session_id}/annotations.json"
-    try:
-        data = s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        data = {"highlights": []}
-
-    annotation.id = str(uuid.uuid4())
-    annotation.timestamp = pd.Timestamp.now().isoformat()
-    data["highlights"].append(annotation.dict())
-    s3_handler.write_json(annotations_key, data)
-
-    return annotation
-
-@app.delete("/api/literature/sessions/{session_id}/annotations/{annotation_id}")
-def delete_literature_annotation(session_id: str, annotation_id: str):
-    """Delete a literature annotation."""
-    if not s3_handler:
-        raise HTTPException(status_code=500, detail="S3 storage is not configured.")
-
-    annotations_key = f"literature/{session_id}/annotations.json"
-    try:
-        data = s3_handler.read_json(annotations_key)
-    except s3_handler.s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Annotations not found")
-
-    original_len = len(data["highlights"])
-    data["highlights"] = [a for a in data["highlights"] if a["id"] != annotation_id]
-
-    if len(data["highlights"]) == original_len:
-        raise HTTPException(status_code=404, detail="Annotation not found")
-
-    s3_handler.write_json(annotations_key, data)
-
-    return {"status": "deleted"}
+# --- Static Files (for Production) ---
+# This must be the last mount to not interfere with API routes.
+app.mount("/", StaticFiles(directory="dist", html=True), name="static")
 
 # To run this API:
 # uvicorn api:app --reload

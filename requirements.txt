@@ -7,8 +7,9 @@ sdv
 plotly
 scikit-learn
 fpdf
-python-dotenv
 pydantic
+python-dotenv
+anthropic
 openpyxl
 sqlalchemy
 python-jose[cryptography]
@@ -16,4 +17,3 @@ passlib[bcrypt]
 argon2-cffi
 pyarrow
 fhir.resources
-boto3

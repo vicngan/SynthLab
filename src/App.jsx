@@ -93,20 +93,20 @@ const App = () => {
             formData.append('sensitive_column', synthSettings.sensitive_column);
         }
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/synthesize', formData);
+            const response = await axios.post('/api/synthesize', formData);
             const jobId = response.data.job_id;
             setSynthProgress({ status: 'running', message: 'Training model... This may take a few minutes.' });
 
             // Poll for job completion
             const pollInterval = setInterval(async () => {
                 try {
-                    const statusResponse = await axios.get(`http://127.0.0.1:8000/api/jobs/${jobId}`);
+                    const statusResponse = await axios.get(`/api/jobs/${jobId}`);
                     const jobStatus = statusResponse.data.status;
 
                     if (jobStatus === 'completed') {
                         clearInterval(pollInterval);
                         // Fetch full experiment results
-                        const resultsResponse = await axios.get(`http://127.0.0.1:8000/api/experiments/${jobId}`);
+                        const resultsResponse = await axios.get(`/api/experiments/${jobId}`);
                         setSynthResults(resultsResponse.data);
                         setSynthProgress(null);
                         setSynthLoading(false);
@@ -139,7 +139,7 @@ const App = () => {
         const formData = new FormData();
         litFiles.forEach(file => formData.append('files', file));
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/literature/upload', formData);
+            const response = await axios.post('/api/literature/upload', formData);
             setLitSessionId(response.data.session_id);
             setLitStats(response.data.stats);
         } catch (err) {
@@ -158,7 +158,7 @@ const App = () => {
         formData.append('session_id', litSessionId);
         formData.append('query', litQuery);
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/literature/search', formData);
+            const response = await axios.post('/api/literature/search', formData);
             setLitResults(response.data);
         } catch (err) {
             setLitError(err.response?.data?.detail || 'Failed to perform search.');
@@ -171,7 +171,7 @@ const App = () => {
         if (!saveSessionName.trim()) return;
         setLitLoading({ ...litLoading, saving: true });
         try {
-            await axios.post(`http://127.0.0.1:8000/api/literature/sessions/${litSessionId}/save`, {
+            await axios.post(`/api/literature/sessions/${litSessionId}/save`, {
                 name: saveSessionName.trim()
             });
             setShowSaveModal(false);

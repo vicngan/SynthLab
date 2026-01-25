@@ -54,20 +54,11 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 - **Smart Type Detection**: Automatically identifies clinical columns (e.g., HbA1c, Glucose) and suggests appropriate physiological bounds and distributions.
 - **ICD-10 Support**: Specialized validation for hierarchical medical codes to ensure synthetic data adheres to standard medical coding formats.
 
-### Literature Intelligence
-- **PDF Knowledge Base**: Upload and index research papers (PDFs) to create a searchable local library.
-- **Semantic Search**: Use natural language queries to find relevant sections across your uploaded literature.
-- **AI Summarization (Demo Mode)**: Generates a mock summary of search results to showcase the feature's place in the workflow. This runs instantly without external dependencies.
-- **Session Persistence**: Save and load literature review sessions. FAISS indexes, search history, and annotations are preserved to disk for long-term storage.
-- **Search History**: Browse previous queries and their results within any saved session.
-- **Text Highlighting**: Select and highlight text in search results with color-coded annotations and optional notes.
-
 ### Collaboration & Versioning
 - **Annotation Layers**: Add Markdown notes to a generation run and place positional annotations directly on graphs for precise commentary.
 - **Dataset Forking**: Let a user take an existing synthetic dataset configuration and "branch" it to test a different hypothesis (e.g., "What if we skew the age distribution older?").
 - **Version Control**: Automatic saving of data, configurations, and modifications to ensure full reproducibility and lineage tracking.
 - **Persistent Storage**: All annotations (graph notes, literature highlights) are stored as JSON files for long-term access across sessions.
-- **Cloud-Native Storage**: All experiment and literature artifacts are stored in a cloud object store (like AWS S3) to ensure data persistence and scalability in a deployed environment.
 
 ---
 
@@ -76,7 +67,7 @@ SynthLab provides a robust set of features, all accessible through an intuitive 
 ### Prerequisites
 *   **Node.js** (v18+) and **npm** for the React frontend.
 *   **Python** (v3.9+) and **pip** for the FastAPI backend.
-*   **AWS Account & S3 Bucket**: The backend requires an S3 bucket for persistent storage of experiment artifacts.
+*   **Anthropic API Key**: For the Literature Review feature, you need an API key from [Anthropic](https://console.anthropic.com/).
 
 ### Installation & Running
 
@@ -84,9 +75,9 @@ The application must be run in two separate terminal sessions: one for the backe
 
 **1. Run the Backend API:**
 
-First, create a `.env` file in the root directory and add your AWS and Ollama configuration:
+First, create a `.env` file in the root directory and add your Anthropic API key:
 ```.env
-S3_BUCKET_NAME=your-s3-bucket-name
+ANTHROPIC_API_KEY=your-claude-api-key
 ```
 
 ```bash
