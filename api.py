@@ -668,8 +668,10 @@ async def save_literature_session(session_id: str, payload: LitSessionSave):
     return {"status": "success", "name": payload.name, "path": str(save_path)}
 
 # --- Static Files (for Production) ---
-# This must be the last mount to not interfere with API routes.
-app.mount("/", StaticFiles(directory="dist", html=True), name="static")
+# Only mount if dist folder exists (for combined frontend+backend deployment)
+# In split deployment (Netlify frontend + Render backend), dist won't exist
+if Path("dist").exists():
+    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
 
 # To run this API:
 # uvicorn api:app --reload
