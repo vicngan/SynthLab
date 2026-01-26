@@ -1,0 +1,18 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Deploy with: Connect repo to Render Dashboard
+
+services:
+  - type: web
+    name: synthlab-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false  # Set to your Netlify URL after deploying frontend
+      - key: PYTHON_VERSION
+        value: "3.11"
+    healthCheckPath: /
+    autoDeploy: true

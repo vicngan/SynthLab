@@ -1,0 +1,21 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# IMPORTANT: API proxy must come BEFORE the SPA catch-all redirect
+# Replace "your-backend-url" with your actual Render URL after deploying backend
+# Example: https://synthlab-api.onrender.com
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-backend-url.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# SPA routing - redirect all non-API requests to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

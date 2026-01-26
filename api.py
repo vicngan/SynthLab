@@ -149,13 +149,19 @@ app = FastAPI(
 )
 
 # --- CORS Middleware ---
-# Read the frontend URL from an environment variable for production flexibility.
-# Default to localhost:3000 for local development.
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# Support multiple origins for development and production
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+# Add production frontend URL if configured
+if FRONTEND_URL:
+    ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL], # Allow the frontend origin
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -165,6 +171,7 @@ app.add_middleware(
 # Use a remote Ollama host if specified, otherwise default to local.
 # --- In-Memory Storage for Literature Search ---
 jobs = {}
+literature_sessions = {}
 
 # --- Pydantic Models ---
 class NoteUpdate(BaseModel):
@@ -193,7 +200,7 @@ def check_shutdown():
     """Check if shutdown has been requested."""
     return shutdown_event.is_set()
 
-def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float, sequence_key: str = None, sequence_index: str = None):
+def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, num_rows: int, sensitive_column: str, epsilon: float, epochs: int = 300, sequence_key: str = None, sequence_index: str = None):
     exp_key_prefix = f"experiments/{experiment_id}"
     config_key = f"{exp_key_prefix}/config.json"
 
@@ -229,9 +236,15 @@ def run_synthesis_task(experiment_id: str, file_contents: bytes, method: str, nu
         if check_shutdown():
             raise InterruptedError("Shutdown requested before model training")
 
-        # Pass epsilon, cache, and constraint manager to the generator
+        # Pass epsilon, epochs, cache, and constraint manager to the generator
+        # CTGAN and TVAE accept epochs as a model parameter
+        model_params = {}
+        if method in ['CTGAN', 'TVAE'] and epochs:
+            model_params['epochs'] = epochs
+
         generator = SyntheticGenerator(
             method=method,
+            model_params=model_params,
             epsilon=epsilon if epsilon > 0 else None,
             sequence_key=sequence_key,
             sequence_index=sequence_index,
@@ -313,7 +326,8 @@ async def synthesize_data(
     method: str = Form("CTGAN"),
     num_rows: int = Form(1000),
     sensitive_column: str = Form(None),
-    epsilon: float = Form(0.0), # Add epsilon parameter
+    epsilon: float = Form(0.0),
+    epochs: int = Form(300),
     sequence_key: str = Form(None), # Column for Entity ID (e.g., PatientID)
     sequence_index: str = Form(None) # Column for Time/Order (e.g., VisitDate)
 ):
@@ -332,6 +346,7 @@ async def synthesize_data(
             "num_rows": num_rows,
             "sensitive_column": sensitive_column,
             "epsilon": epsilon,
+            "epochs": epochs,
             "sequence_key": sequence_key,
             "sequence_index": sequence_index,
             "status": "pending",
@@ -348,7 +363,7 @@ async def synthesize_data(
         jobs[experiment_id] = {"status": "pending", "experiment_id": experiment_id}
 
         # Offload heavy work to background task
-        background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon, sequence_key, sequence_index)
+        background_tasks.add_task(run_synthesis_task, experiment_id, contents, method, num_rows, sensitive_column, epsilon, epochs, sequence_key, sequence_index)
 
         return {"job_id": experiment_id, "status": "pending"}
 
