@@ -12,10 +12,12 @@ import uuid
 
 from dotenv import load_dotenv
 from fpdf import FPDF
+from anthropic import AuthenticationError, RateLimitError, APIConnectionError
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Body, BackgroundTasks
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -166,6 +168,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Custom Exception Handler for Validation Errors ---
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """
+    Log and return detailed validation errors.
+    This makes it easier to debug 422 Unprocessable Entity errors.
+    """
+    # Try to get the raw body for more informative logging
+    raw_body = b""
+    try:
+        raw_body = await request.body()
+    except Exception:
+        # Body might not be available or could have already been read
+        pass
+
+    # The `exc.errors()` can contain non-serializable types like `bytes` if, for example,
+    # a file is uploaded to a field expecting a string. We need to make it serializable.
+    try:
+        # Attempt to serialize to a string for logging, replacing non-serializable parts.
+        # The default lambda converts any non-standard object to a string representation.
+        errors_str = json.dumps(exc.errors(), default=lambda o: f"<unserializable type: {type(o).__name__}>")
+        # Convert the string back to a Python object (list of dicts) that is guaranteed to be serializable.
+        serializable_errors = json.loads(errors_str)
+    except Exception:
+        # As a fallback, just use the raw string representation if the above fails.
+        serializable_errors = str(exc.errors())
+
+    print(f"Caught RequestValidationError for request: {request.method} {request.url}")
+    if raw_body:
+        print(f"Request Body: {raw_body.decode(errors='ignore')}")
+    print(f"Error details (serializable): {serializable_errors}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation Error", "errors": serializable_errors},
+    )
+
 
 # --- Ollama Client Initialization ---
 # Use a remote Ollama host if specified, otherwise default to local.
@@ -628,16 +667,48 @@ async def upload_literature(files: List[UploadFile] = File(...)):
     return {"session_id": session_id, "stats": stats}
 
 @app.post("/api/literature/search")
-async def search_literature(request: LitSearchRequest):
-    session_id = request.session_id
-    query = request.query
-    
+async def search_literature(
+    session_id: str = Form(...),
+    query: str = Form(...)
+):
     session = literature_sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Literature session not found or expired.")
         
-    results = session.search(query)
-    return results
+    try:
+        results = session.search(query)
+        return results
+    except AuthenticationError as e:
+        print(f"ERROR: Anthropic authentication failed: {e}")
+        raise HTTPException(status_code=500, detail="Anthropic API authentication failed. Please check your ANTHROPIC_API_KEY in the .env file.")
+    except RateLimitError as e:
+        print(f"ERROR: Anthropic rate limit exceeded: {e}")
+        raise HTTPException(status_code=429, detail="Anthropic API rate limit exceeded. Please wait and try again later.")
+    except APIConnectionError as e:
+        print(f"ERROR: Could not connect to Anthropic API: {e}")
+        raise HTTPException(status_code=503, detail="Could not connect to the literature search service. Please check network connectivity.")
+    except Exception as e:
+        # Log the full exception for server-side debugging
+        print(f"ERROR: An unexpected error occurred during literature search for session '{session_id}': {e}")
+        # Log the full traceback for detailed debugging
+        import traceback
+        traceback.print_exc()
+        # Return a structured error to the client
+        raise HTTPException(status_code=500, detail="An internal error occurred during the search. Check server logs for details.")
+
+@app.get("/api/literature/sessions/{session_id}/queries")
+def get_literature_search_history(session_id: str):
+    """
+    Returns the search history for an active literature session.
+    """
+    session = literature_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Active literature session not found.")
+    
+    # The search_history might not exist on older pickled objects
+    history = getattr(session, 'search_history', [])
+    history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return history
 
 @app.get("/api/literature/sessions")
 def list_literature_sessions():
@@ -659,13 +730,58 @@ async def save_literature_session(session_id: str, payload: LitSessionSave):
     if not session:
         raise HTTPException(status_code=404, detail="Active session not found.")
     
-    session_dir = LITERATURE_DIR / "sessions"
-    safe_name = "".join(c if c.isalnum() else "_" for c in payload.name)
-    save_path = session_dir / f"{safe_name}.pkl"
-    
-    session.save_session(save_path)
-    
-    return {"status": "success", "name": payload.name, "path": str(save_path)}
+    try:
+        session_dir = LITERATURE_DIR / "sessions"
+        # Ensure the directory exists before trying to save
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_name = "".join(c if c.isalnum() else "_" for c in payload.name)
+        save_path = session_dir / f"{safe_name}.pkl"
+        
+        session.save_session(save_path)
+        
+        return {"status": "success", "name": payload.name, "path": str(save_path)}
+    except Exception as e:
+        print(f"ERROR: Failed to save literature session '{session_id}': {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to save session. This could be due to a disk write error or an issue serializing the session object. Check server logs for details.")
+
+@app.post("/api/literature/sessions/{saved_session_id}/load")
+async def load_literature_session(saved_session_id: str):
+    """
+    Loads a saved literature session from disk and makes it active.
+    """
+    session_path = LITERATURE_DIR / "sessions" / f"{saved_session_id}.pkl"
+    if not session_path.exists():
+        raise HTTPException(status_code=404, detail="Saved session not found.")
+
+    try:
+        session = LiteratureSearch.load_session(session_path)
+        new_active_id = f"lit_{uuid.uuid4().hex[:8]}"
+        literature_sessions[new_active_id] = session
+        stats = session.get_stats()
+        return {"session_id": new_active_id, "stats": stats, "name": saved_session_id.replace("_", " ").title()}
+    except Exception as e:
+        print(f"ERROR: Failed to load literature session '{saved_session_id}': {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load session. The file might be corrupted or incompatible. Check server logs.")
+
+@app.delete("/api/literature/sessions/{saved_session_id}")
+async def delete_literature_session(saved_session_id: str):
+    """
+    Deletes a saved literature session from disk.
+    """
+    session_path = LITERATURE_DIR / "sessions" / f"{saved_session_id}.pkl"
+    if not session_path.exists():
+        raise HTTPException(status_code=404, detail="Saved session not found.")
+    try:
+        session_path.unlink()
+        return {"status": "deleted", "session_id": saved_session_id}
+    except Exception as e:
+        print(f"ERROR: Failed to delete literature session '{saved_session_id}': {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete session file.")
 
 # --- Static Files (for Production) ---
 # Only mount if dist folder exists (for combined frontend+backend deployment)

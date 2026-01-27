@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 import numpy as np
 import pickle
 import anthropic
+from datetime import datetime
 import json
 try: 
     from PyPDF2 import PdfReader
@@ -34,7 +35,27 @@ class LiteratureSearch:
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model_name = "claude-3-haiku-20240307" # Fast and capable
         self.documents = [] # List of dicts: {'filename': str, 'page_number': int, 'text': str}
+        self.search_history = []
         print("LiteratureSearch initialized with Anthropic Claude API.")
+
+    def __getstate__(self):
+        """
+        Prepare the object's state for pickling. Excludes the non-serializable client.
+        """
+        state = self.__dict__.copy()
+        # The 'client' attribute contains thread locks and is not serializable.
+        # It will be re-initialized upon loading.
+        del state['client']
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore the object's state after unpickling.
+        """
+        self.__dict__.update(state)
+        # The client is not part of the pickled state and must be re-initialized.
+        # We set it to None here; `load_session` is responsible for creating a new client.
+        self.client = None
 
     def extract_text_from_pdf(self, pdf_path: str) -> List[str]:
         """
@@ -103,6 +124,13 @@ class LiteratureSearch:
         """
         if not self.documents:
             return {"summary": "No documents have been uploaded. Please upload PDFs first.", "results": []}
+
+        # Add to search history before performing the search
+        self.search_history.append({
+            "query": query,
+            "timestamp": datetime.now().isoformat(),
+            "top_k": top_k
+        })
 
         # Construct the context for Claude
         context_str = "<documents>\n"

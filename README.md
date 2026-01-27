@@ -87,9 +87,14 @@ cd /path/to/SynthLab
 # (Recommended) Create and activate a Python virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+# Your terminal prompt should now start with `(venv)`.
 
 # Install Python dependencies
 pip install -r requirements.txt
+
+# Verify installation (optional but recommended)
+# This command should show details about the 'sdv' package if installed correctly.
+pip show sdv
 
 uvicorn api:app --reload
 ```
